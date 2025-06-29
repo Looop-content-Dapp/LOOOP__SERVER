@@ -1,0 +1,29 @@
+# .gitignore
+
+# Node modules
+node_modules
+
+# Logs
+logs
+*.log
+
+# Build output
+dist
+
+# Dotenv environment variables file
+.env
+
+# IDEs and editors
+.idea
+.vscode
+
+# Test output
+coverage
+
+# Miscellaneous
+.DS_Store
+*.pem
+
+# Prisma
+prisma/dev.db
+prisma/dev.db-journal
