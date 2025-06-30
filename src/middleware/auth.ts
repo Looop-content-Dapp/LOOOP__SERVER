@@ -1,6 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import { auth } from '@/config/auth';
 import { logger } from '@/utils/logger';
+import { fromNodeHeaders } from 'better-auth/node';
+import { prisma } from '@/config/database';
 
 export interface AuthenticatedRequest extends Request {
   user?: {
@@ -21,6 +23,21 @@ export interface AuthenticatedRequest extends Request {
   };
 }
 
+// Helper function to convert Express headers to Web API Headers
+export function createHeaders(expressHeaders: any): Headers {
+  const headers = new Headers();
+
+  for (const [key, value] of Object.entries(expressHeaders)) {
+    if (typeof value === 'string') {
+      headers.set(key, value);
+    } else if (Array.isArray(value)) {
+      headers.set(key, value.join(', '));
+    }
+  }
+
+  return headers;
+}
+
 export const requireAuth = async (
   req: AuthenticatedRequest,
   res: Response,
@@ -28,8 +45,9 @@ export const requireAuth = async (
 ): Promise<void> => {
   try {
     const session = await auth.api.getSession({
-      headers: req.headers as Record<string, string>
+      headers: createHeaders(req.headers),
     });
+    console.log("session", session);
 
     if (!session) {
       res.status(401).json({
@@ -41,8 +59,11 @@ export const requireAuth = async (
       return;
     }
 
-    // Attach user and session to request
-    req.user = session.user;
+    // Attach user and session to request with isVerified property
+    req.user = {
+      ...session.user,
+      isVerified: session.user.emailVerified || false
+    };
     req.session = session.session;
 
     next();
@@ -59,16 +80,19 @@ export const requireAuth = async (
 
 export const optionalAuth = async (
   req: AuthenticatedRequest,
-  res: Response,
+  _res: Response,
   next: NextFunction
 ): Promise<void> => {
   try {
     const session = await auth.api.getSession({
-      headers: req.headers as Record<string, string>
+      headers: createHeaders(req.headers)
     });
 
     if (session) {
-      req.user = session.user;
+      req.user = {
+        ...session.user,
+        isVerified: session.user.emailVerified || false
+      };
       req.session = session.session;
     }
 

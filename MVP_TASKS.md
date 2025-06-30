@@ -40,11 +40,6 @@ This MVP focuses on core functionality for a music streaming platform with basic
   - [ ] Avatar upload with Cloudinary
   - [ ] Basic user preferences
 
-- [ ] **Basic Testing Setup**
-  - [ ] Set up test database
-  - [ ] Write auth tests with Mocha/Chai
-  - [ ] Test user registration and login flows
-
 ### Phase 2: Core Music Features (Week 3-4)
 
 #### High Priority

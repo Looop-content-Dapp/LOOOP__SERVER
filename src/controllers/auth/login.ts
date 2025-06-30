@@ -5,6 +5,9 @@ import { prisma } from '@/config/database';
 import { logger } from '@/utils/logger';
 import { createError } from '@/middleware/errorHandler';
 import { validateEmail } from '@/utils/validation';
+import { auth } from '@/config/auth';
+import { createHeaders } from '@/middleware/auth';
+import { fromNodeHeaders } from 'better-auth/node';
 
 interface LoginRequest {
   email: string;
@@ -15,6 +18,10 @@ interface LoginRequest {
 interface TokenPayload {
   userId: string;
   email: string;
+}
+
+interface LogoutRequest {
+  token?: string;
 }
 
 export const login = async (req: Request, res: Response): Promise<void> => {
@@ -30,30 +37,20 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       throw createError('Invalid email format', 400);
     }
 
+    const user = await prisma.user.findUnique({ where: { email } });
+    console.log("user", user)
+
     // Find user with account
-    const user = await prisma.user.findUnique({
-      where: { email: email.toLowerCase() },
-      include: {
-        accounts: {
-          where: { providerId: 'credential' }
-        }
-      }
-    });
-
-    if (!user || user.accounts.length === 0) {
-      // Generic error message for security
-      throw createError('Invalid email or password', 401);
+    const response = await auth.api.signInEmail({
+    body: {
+      email: email.toLowerCase(),
+      password: password,
+      rememberMe
     }
+    })
 
-    const account = user.accounts[0];
-    if (!account.password) {
-      throw createError('Invalid email or password', 401);
-    }
-
-    // Verify password
-    const isValidPassword = await bcrypt.compare(password, account.password);
-    if (!isValidPassword) {
-      logger.warn('Failed login attempt', { 
+    if (!user) {
+      logger.warn('Failed login attempt', {
         email: email.toLowerCase(),
         ip: req.ip,
         userAgent: req.get('User-Agent')
@@ -61,71 +58,25 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       throw createError('Invalid email or password', 401);
     }
 
-    // Generate tokens
-    const secret = process.env.JWT_SECRET || process.env.BETTER_AUTH_SECRET;
-    if (!secret) {
-      logger.error('JWT_SECRET not configured');
-      throw createError('Authentication configuration error', 500);
-    }
-
-    const tokenPayload: TokenPayload = {
-      userId: user.id,
-      email: user.email
-    };
-
-    // Access token (15 minutes)
-    const accessToken = jwt.sign(tokenPayload, secret, {
-      expiresIn: '15m',
-      issuer: 'looop-music',
-      audience: 'looop-users'
-    });
-
-    // Refresh token (7 days or 30 days if remember me)
-    const refreshTokenExpiry = rememberMe ? '30d' : '7d';
-    const refreshToken = jwt.sign(tokenPayload, secret, {
-      expiresIn: refreshTokenExpiry,
-      issuer: 'looop-music',
-      audience: 'looop-users'
-    });
-
-    // Create session in database
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + (rememberMe ? 30 : 7));
-
-    const session = await prisma.session.create({
-      data: {
-        userId: user.id,
-        token: refreshToken,
-        expiresAt,
-        ipAddress: req.ip,
-        userAgent: req.get('User-Agent') || null
-      }
-    });
-
-    // Update last login
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { lastLoginAt: new Date() }
-    });
-
     logger.info('User logged in successfully', {
-      userId: user.id,
-      email: user.email,
-      sessionId: session.id,
-      rememberMe
+      userId: response.user.id,
+      email: response.user.email,
+      sessionId: response.token
     });
+
+    const data = await prisma.user.findUnique({where: {email}})
 
     // Prepare user data for response
     const userData = {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      username: user.username,
-      image: user.image,
-      emailVerified: user.emailVerified,
-      isVerified: user.isVerified,
-      bio: user.bio,
-      lastLoginAt: user.lastLoginAt
+      id: response.user.id,
+      name: response.user.name,
+      email: response.user.email,
+      username: data.username,
+      image:  response.user.image,
+      emailVerified: response.user.emailVerified,
+      isVerified: data.isVerified,
+      bio: data.bio,
+      lastLoginAt: data.lastLoginAt
     };
 
     res.status(200).json({
@@ -133,7 +84,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       message: 'Login successful',
       data: {
         user: userData,
-        accessToken,
+        accessToken: response.token,
         refreshToken,
         expiresIn: 900, // 15 minutes in seconds
         tokenType: 'Bearer'
@@ -242,17 +193,15 @@ export const refreshToken = async (req: Request, res: Response): Promise<void> =
 
 export const logout = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { refreshToken } = req.body;
+    // Get session from request headers
+    await auth.api.signOut({
+      headers: fromNodeHeaders(req.headers),
+      method: 'POST'
+    });
 
-    if (refreshToken) {
-      // Remove session from database
-      await prisma.session.deleteMany({
-        where: { token: refreshToken }
-      });
-
-      logger.info('User logged out successfully');
-    }
-
+    // Clear any session cookies if using them
+    res.clearCookie('session');
+    
     res.status(200).json({
       success: true,
       message: 'Logout successful'
@@ -260,7 +209,6 @@ export const logout = async (req: Request, res: Response): Promise<void> => {
 
   } catch (error) {
     logger.error('Logout error:', error);
-    
     // Even if there's an error, we should return success for logout
     res.status(200).json({
       success: true,

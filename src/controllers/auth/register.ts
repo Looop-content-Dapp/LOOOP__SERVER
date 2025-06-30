@@ -5,6 +5,9 @@ import { logger } from '@/utils/logger';
 import { createError } from '@/middleware/errorHandler';
 import { generateReferralCode } from '@/utils/referral';
 import { validateEmail, validatePassword } from '@/utils/validation';
+import { starknetService } from '@/services/starknet.service';
+import { auth } from '@/config/auth';
+import { createHeaders } from '@/middleware/auth';
 
 interface RegisterRequest {
   name: string;
@@ -12,14 +15,15 @@ interface RegisterRequest {
   password: string;
   username?: string;
   referralCode?: string;
+  bio: string;
 }
 
 export const register = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { name, email, password, username, referralCode }: RegisterRequest = req.body;
+    const { name, email, password, username, referralCode, bio }: RegisterRequest = req.body;
 
     // Validation
-    if (!name || !email || !password) {
+    if (!name || !email || !password  || !username) {
       throw createError('Name, email, and password are required', 400);
     }
 
@@ -53,9 +57,30 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       }
     }
 
-    // Hash password
+   // Hash password
     const saltRounds = 12;
     const hashedPassword = await bcrypt.hash(password, saltRounds);
+
+    const session = await auth.api.signUpEmail({
+    headers: createHeaders(req.headers),
+    method: "POST",
+     body: {
+      name: name,
+      email: email,
+      password: password,
+    },
+    })
+
+    await prisma.user.update({
+      where: {
+        id: session.user.id
+      },
+      data: {
+        id: session.user.id,
+        username: username?.toLowerCase(),
+        bio: bio
+      }
+    })
 
     // Handle referral if provided
     let referrer = null;
@@ -73,77 +98,23 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       }
     }
 
-    // Create user with transaction
-    const result = await prisma.$transaction(async (tx) => {
-      // Create user
-      const user = await tx.user.create({
+    const walletInfo = await starknetService.createUserWallet(email);
+    console.log("Wallet info:", walletInfo);
+
+    // Create user
+    await prisma.wallet.create({
         data: {
-          name: name.trim(),
-          email: email.toLowerCase(),
-          username: username?.toLowerCase() || null,
-          emailVerified: false,
-          isVerified: false,
-        },
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          username: true,
-          emailVerified: true,
-          isVerified: true,
-          createdAt: true
+            email: email,
+            address: walletInfo.address,
+            publickey: walletInfo.publickey,
+            encryptedPrivateKey: walletInfo.privateKey,
+            userId: session.user.id
         }
-      });
-
-      // Create account for password storage
-      await tx.account.create({
-        data: {
-          userId: user.id,
-          accountId: user.email,
-          providerId: 'credential',
-          password: hashedPassword,
-        }
-      });
-
-      // Handle referral completion
-      if (referrer) {
-        await tx.referral.update({
-          where: { id: referrer.id },
-          data: {
-            referredId: user.id,
-            status: 'completed',
-            completedAt: new Date(),
-            reward: {
-              type: 'signup_bonus',
-              amount: 10, // Example reward
-              currency: 'USD'
-            }
-          }
-        });
-
-        logger.info('Referral completed', {
-          referrerId: referrer.referrerId,
-          referredId: user.id,
-          code: referralCode
-        });
-      }
-
-      // Create user's own referral code
-      const userReferralCode = generateReferralCode(user.name, user.id);
-      await tx.referral.create({
-        data: {
-          referrerId: user.id,
-          code: userReferralCode,
-          status: 'pending'
-        }
-      });
-
-      return { user, referralCode: userReferralCode };
-    });
+    })
 
     logger.info('User registered successfully', {
-      userId: result.user.id,
-      email: result.user.email,
+      userId: session.user.id,
+      email: session.user.email,
       hasReferrer: !!referrer
     });
 
@@ -151,9 +122,9 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       success: true,
       message: 'User registered successfully. Please check your email for verification.',
       data: {
-        user: result.user,
-        referralCode: result.referralCode
-      }
+        user: session.user,
+      },
+      walletInfo
     });
 
   } catch (error) {

@@ -1,24 +1,53 @@
-import { Router, Response, } from 'express';
+import { Router, Response, Request } from 'express';
 import { authRateLimiter } from '@/middleware/rateLimiter';
-// Controllers will be implemented later
-// import { register, login, logout, refreshToken, googleAuth } from '@/controllers/auth';
+import { requireAuth, optionalAuth } from '@/middleware/auth';
+import { asyncHandler } from '@/middleware/errorHandler';
+
+// Import auth controllers
+import { login, logout, refreshToken } from '@/controllers/auth/login';
+import { register } from '@/controllers/auth/register';
 
 const router: Router = Router();
 
 // Apply rate limiting to all auth routes
 router.use(authRateLimiter);
 
-// Authentication routes (to be implemented)
-// router.post('/register', register);
-// router.post('/login', login);
-// router.post('/logout', logout);
-// router.post('/refresh', refreshToken);
+// Public authentication routes
+router.post('/register', asyncHandler(register));
+router.post('/login', asyncHandler(login));
+router.post('/refresh', asyncHandler(refreshToken));
+
+// Protected authentication routes
+router.post('/logout', requireAuth, asyncHandler(logout));
+
+// Password reset routes (to be implemented)
+// router.post('/forgot-password', asyncHandler(forgotPassword));
+// router.post('/reset-password', asyncHandler(resetPassword));
+
+// Email verification routes (to be implemented)
+// router.post('/verify-email', asyncHandler(verifyEmail));
+// router.post('/resend-verification', asyncHandler(resendVerification));
+
+// OAuth routes (to be implemented with Better Auth)
 // router.get('/google', googleAuth);
 // router.get('/google/callback', googleAuthCallback);
 
-// Placeholder routes for MVP setup
-router.get('/health', (res: Response) => {
-  res.json({ message: 'Auth routes are ready for implementation' });
+// Auth status check
+router.get('/me', requireAuth, (req: Request, res: Response) => {
+  res.json({
+    success: true,
+    message: 'Authenticated',
+    data: { user: (req as any).user }
+  });
+});
+
+// Health check
+router.get('/health', (_req: Request, res: Response) => {
+  res.json({
+    success: true,
+    message: 'Auth routes are operational',
+    timestamp: new Date().toISOString()
+  });
 });
 
 export default router;
