@@ -1,0 +1,447 @@
+{
+    "info": {
+        "name": "LOOOP API Collection",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "item": [
+        {
+            "name": "Artist",
+            "item": [
+                {
+                    "name": "Claims",
+                    "item": [
+                        {
+                            "name": "Claim Artist Profile",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{baseUrl}}/api/artists/claims",
+                                    "host": [
+                                        "{{baseUrl}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "artists",
+                                        "claims"
+                                    ]
+                                },
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n  \"email\": \"artist@example.com\",\n  \"artistId\": \"artist_id\",\n  \"evidenceUrl\": \"https://evidence.example.com\"\n}"
+                                }
+                            }
+                        },
+                        {
+                            "name": "Get User Claims",
+                            "request": {
+                                "method": "GET",
+                                "url": {
+                                    "raw": "{{baseUrl}}/api/artists/claims/me",
+                                    "host": [
+                                        "{{baseUrl}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "artists",
+                                        "claims",
+                                        "me"
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "Get Pending Claims (Admin)",
+                            "request": {
+                                "method": "GET",
+                                "url": {
+                                    "raw": "{{baseUrl}}/api/artists/claims/pending",
+                                    "host": [
+                                        "{{baseUrl}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "artists",
+                                        "claims",
+                                        "pending"
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "Approve Artist Claim (Admin)",
+                            "request": {
+                                "method": "POST",
+                                "url": {
+                                    "raw": "{{baseUrl}}/api/artists/claims/:claimId/approve",
+                                    "host": [
+                                        "{{baseUrl}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "artists",
+                                        "claims",
+                                        ":claimId",
+                                        "approve"
+                                    ]
+                                },
+                                "variable": [
+                                    {
+                                        "key": "claimId",
+                                        "value": "claim_id"
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Reject Artist Claim (Admin)",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{baseUrl}}/api/artists/claims/:claimId/reject",
+                                    "host": [
+                                        "{{baseUrl}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "artists",
+                                        "claims",
+                                        ":claimId",
+                                        "reject"
+                                    ]
+                                },
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n  \"reason\": \"Rejection reason\"\n}"
+                                },
+                                "variable": [
+                                    {
+                                        "key": "claimId",
+                                        "value": "claim_id"
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Profile",
+                    "item": [
+                        {
+                            "name": "Get Artist Profile",
+                            "request": {
+                                "method": "GET",
+                                "url": {
+                                    "raw": "{{baseUrl}}/api/artists/:artistId",
+                                    "host": [
+                                        "{{baseUrl}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "artists",
+                                        ":artistId"
+                                    ]
+                                },
+                                "variable": [
+                                    {
+                                        "key": "artistId",
+                                        "value": "artist_id"
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Get My Artist Profile",
+                            "request": {
+                                "method": "GET",
+                                "url": {
+                                    "raw": "{{baseUrl}}/api/artists/me",
+                                    "host": [
+                                        "{{baseUrl}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "artists",
+                                        "me"
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "Update Artist Profile",
+                            "request": {
+                                "method": "PUT",
+                                "header": [
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{baseUrl}}/api/artists/me",
+                                    "host": [
+                                        "{{baseUrl}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "artists",
+                                        "me"
+                                    ]
+                                },
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n  \"name\": \"Artist Name\",\n  \"biography\": \"Artist bio\",\n  \"websiteurl\": \"https://artist.example.com\",\n  \"address1\": \"Address line 1\",\n  \"address2\": \"Address line 2\",\n  \"country\": \"Country\",\n  \"postalcode\": \"12345\",\n  \"city\": \"City\",\n  \"socialLinks\": {\n    \"twitter\": \"https://twitter.com/artist\",\n    \"instagram\": \"https://instagram.com/artist\"\n  },\n  \"genres\": [\"genre1\", \"genre2\"],\n  \"labels\": [\"label1\", \"label2\"]\n}"
+                                }
+                            }
+                        },
+                        {
+                            "name": "Search Artists",
+                            "request": {
+                                "method": "GET",
+                                "url": {
+                                    "raw": "{{baseUrl}}/api/artists/search?q=search_term&limit=20&offset=0",
+                                    "host": [
+                                        "{{baseUrl}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "artists",
+                                        "search"
+                                    ],
+                                    "query": [
+                                        {
+                                            "key": "q",
+                                            "value": "search_term"
+                                        },
+                                        {
+                                            "key": "limit",
+                                            "value": "20"
+                                        },
+                                        {
+                                            "key": "offset",
+                                            "value": "0"
+                                        }
+                                    ]
+                                }
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "User",
+            "item": [
+                {
+                    "name": "Profile",
+                    "item": [
+                        {
+                            "name": "Get User Profile",
+                            "request": {
+                                "method": "GET",
+                                "url": {
+                                    "raw": "{{baseUrl}}/api/users/me",
+                                    "host": [
+                                        "{{baseUrl}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "users",
+                                        "me"
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "Update User Profile",
+                            "request": {
+                                "method": "PUT",
+                                "header": [
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{baseUrl}}/api/users/me",
+                                    "host": [
+                                        "{{baseUrl}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "users",
+                                        "me"
+                                    ]
+                                },
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n  \"name\": \"User Name\",\n  \"username\": \"username\",\n  \"bio\": \"User bio\"\n}"
+                                }
+                            }
+                        },
+                        {
+                            "name": "Get User Preferences",
+                            "request": {
+                                "method": "GET",
+                                "url": {
+                                    "raw": "{{baseUrl}}/api/users/me/preferences",
+                                    "host": [
+                                        "{{baseUrl}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "users",
+                                        "me",
+                                        "preferences"
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "Update User Preferences",
+                            "request": {
+                                "method": "PUT",
+                                "header": [
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{baseUrl}}/api/users/me/preferences",
+                                    "host": [
+                                        "{{baseUrl}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "users",
+                                        "me",
+                                        "preferences"
+                                    ]
+                                },
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n  \"preferences\": {\n    \"theme\": \"dark\",\n    \"notifications\": true\n  }\n}"
+                                }
+                            }
+                        },
+                        {
+                            "name": "Get User Stats",
+                            "request": {
+                                "method": "GET",
+                                "url": {
+                                    "raw": "{{baseUrl}}/api/users/me/stats",
+                                    "host": [
+                                        "{{baseUrl}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "users",
+                                        "me",
+                                        "stats"
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "Delete User Account",
+                            "request": {
+                                "method": "DELETE",
+                                "header": [
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{baseUrl}}/api/users/me",
+                                    "host": [
+                                        "{{baseUrl}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "users",
+                                        "me"
+                                    ]
+                                },
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n  \"confirmDelete\": true\n}"
+                                }
+                            }
+                        },
+                        {
+                            "name": "Upload User Avatar",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "multipart/form-data"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{baseUrl}}/api/users/me/avatar",
+                                    "host": [
+                                        "{{baseUrl}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "users",
+                                        "me",
+                                        "avatar"
+                                    ]
+                                },
+                                "body": {
+                                    "mode": "formdata",
+                                    "formdata": [
+                                        {
+                                            "key": "avatar",
+                                            "type": "file",
+                                            "src": ""
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "Remove User Avatar",
+                            "request": {
+                                "method": "DELETE",
+                                "url": {
+                                    "raw": "{{baseUrl}}/api/users/me/avatar",
+                                    "host": [
+                                        "{{baseUrl}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "users",
+                                        "me",
+                                        "avatar"
+                                    ]
+                                }
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+    ],
+    "variable": [
+        {
+            "key": "baseUrl",
+            "value": "http://localhost:3000"
+        }
+    ]
+}

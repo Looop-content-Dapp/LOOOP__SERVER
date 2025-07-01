@@ -18,7 +18,7 @@ router.post('/login', asyncHandler(login));
 router.post('/refresh', asyncHandler(refreshToken));
 
 // Protected authentication routes
-router.post('/logout', requireAuth, asyncHandler(logout));
+router.post('/logout', asyncHandler(logout));
 
 // Password reset routes (to be implemented)
 // router.post('/forgot-password', asyncHandler(forgotPassword));
@@ -33,7 +33,7 @@ router.post('/logout', requireAuth, asyncHandler(logout));
 // router.get('/google/callback', googleAuthCallback);
 
 // Auth status check
-router.get('/me', requireAuth, (req: Request, res: Response) => {
+router.get('/me', (req: Request, res: Response) => {
   res.json({
     success: true,
     message: 'Authenticated',

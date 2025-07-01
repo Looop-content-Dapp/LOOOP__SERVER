@@ -7,7 +7,7 @@ import { generateReferralCode } from '@/utils/referral';
 import { validateEmail, validatePassword } from '@/utils/validation';
 import { starknetService } from '@/services/starknet.service';
 import { auth } from '@/config/auth';
-import { createHeaders } from '@/middleware/auth';
+import { fromNodeHeaders } from 'better-auth/node';
 
 interface RegisterRequest {
   name: string;
@@ -62,7 +62,7 @@ export const register = async (req: Request, res: Response): Promise<void> => {
     const hashedPassword = await bcrypt.hash(password, saltRounds);
 
     const session = await auth.api.signUpEmail({
-    headers: createHeaders(req.headers),
+    headers: fromNodeHeaders(req.headers),
     method: "POST",
      body: {
       name: name,

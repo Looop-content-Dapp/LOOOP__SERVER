@@ -1,13 +1,12 @@
 import { Request, Response } from 'express';
-import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { prisma } from '@/config/database';
 import { logger } from '@/utils/logger';
 import { createError } from '@/middleware/errorHandler';
 import { validateEmail } from '@/utils/validation';
 import { auth } from '@/config/auth';
-import { createHeaders } from '@/middleware/auth';
 import { fromNodeHeaders } from 'better-auth/node';
+import { APIError } from 'better-auth/api';
 
 interface LoginRequest {
   email: string;
@@ -18,10 +17,6 @@ interface LoginRequest {
 interface TokenPayload {
   userId: string;
   email: string;
-}
-
-interface LogoutRequest {
-  token?: string;
 }
 
 export const login = async (req: Request, res: Response): Promise<void> => {
@@ -37,19 +32,16 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       throw createError('Invalid email format', 400);
     }
 
-    const user = await prisma.user.findUnique({ where: { email } });
-    console.log("user", user)
-
-    // Find user with account
+    // Authenticate using Better Auth
     const response = await auth.api.signInEmail({
-    body: {
-      email: email.toLowerCase(),
-      password: password,
-      rememberMe
-    }
-    })
+      body: {
+        email: email.toLowerCase(),
+        password: password,
+        rememberMe
+      }
+    });
 
-    if (!user) {
+    if (!response || !response.user) {
       logger.warn('Failed login attempt', {
         email: email.toLowerCase(),
         ip: req.ip,
@@ -64,19 +56,20 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       sessionId: response.token
     });
 
-    const data = await prisma.user.findUnique({where: {email}})
+    // Get additional user data
+    const data = await prisma.user.findUnique({where: {email: response.user.email}});
 
     // Prepare user data for response
     const userData = {
       id: response.user.id,
       name: response.user.name,
       email: response.user.email,
-      username: data.username,
-      image:  response.user.image,
+      username: data?.username,
+      image: response.user.image,
       emailVerified: response.user.emailVerified,
-      isVerified: data.isVerified,
-      bio: data.bio,
-      lastLoginAt: data.lastLoginAt
+      isVerified: data?.isVerified || false,
+      bio: data?.bio,
+      lastLoginAt: data?.lastLoginAt
     };
 
     res.status(200).json({
@@ -84,18 +77,22 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       message: 'Login successful',
       data: {
         user: userData,
-        accessToken: response.token,
-        refreshToken,
-        expiresIn: 900, // 15 minutes in seconds
-        tokenType: 'Bearer'
+        token: response.token,
+        tokenType: 'Bearer',
+        expiresIn: 30 * 24 * 60 * 60 // 30 days in seconds
       }
+    });
+
+    logger.debug('Login response token:', {
+      token: response.token,
+      tokenType: 'Bearer'
     });
 
   } catch (error) {
     logger.error('Login error:', error);
 
-    if (error.statusCode) {
-      res.status(error.statusCode).json({
+    if (error instanceof APIError) {
+      res.status(Number(error.status)).json({
         success: false,
         error: { message: error.message }
       });
@@ -111,73 +108,54 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 
 export const refreshToken = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { refreshToken } = req.body;
+    const headers = fromNodeHeaders(req.headers);
 
-    if (!refreshToken) {
-      throw createError('Refresh token required', 400);
+    // First verify current session
+    const currentSession = await auth.api.getSession({ headers });
+    if (!currentSession) {
+      throw createError('No active session to refresh', 401);
     }
 
-    const secret = process.env.JWT_SECRET || process.env.BETTER_AUTH_SECRET;
-    if (!secret) {
-      throw createError('Authentication configuration error', 500);
-    }
-
-    // Verify refresh token
-    const decoded = jwt.verify(refreshToken, secret) as TokenPayload;
-
-    // Check if session exists and is valid
-    const session = await prisma.session.findFirst({
-      where: {
-        token: refreshToken,
-        userId: decoded.userId,
-        expiresAt: { gt: new Date() }
+    // Re-authenticate to get a fresh session
+    const response = await auth.api.signInEmail({
+      body: {
+        email: currentSession.user.email,
+        password: req.body.password,
+        rememberMe: true
       },
-      include: { user: true }
+      headers,
+      returnHeaders: true
     });
 
-    if (!session) {
-      throw createError('Invalid or expired refresh token', 401);
+    if (!response || !response.response) {
+      throw createError('Failed to refresh session', 401);
     }
 
-    // Generate new access token
-    const tokenPayload: TokenPayload = {
-      userId: session.user.id,
-      email: session.user.email
-    };
-
-    const accessToken = jwt.sign(tokenPayload, secret, {
-      expiresIn: '15m',
-      issuer: 'looop-music',
-      audience: 'looop-users'
+    logger.info('Session refreshed successfully', {
+      userId: response.response.user.id
     });
 
-    logger.info('Token refreshed successfully', {
-      userId: session.user.id,
-      sessionId: session.id
-    });
+    // Handle cookies if present
+    const cookies = response.headers.get('set-cookie');
+    if (cookies) {
+      res.setHeader('Set-Cookie', cookies);
+    }
 
     res.status(200).json({
       success: true,
       data: {
-        accessToken,
-        expiresIn: 900, // 15 minutes in seconds
-        tokenType: 'Bearer'
+        user: response.response.user,
+        token: response.response.token,
+        tokenType: 'Bearer',
+        expiresIn: 30 * 24 * 60 * 60 // 30 days in seconds
       }
     });
 
   } catch (error) {
-    if (error instanceof jwt.JsonWebTokenError || error instanceof jwt.TokenExpiredError) {
-      res.status(401).json({
-        success: false,
-        error: { message: 'Invalid or expired refresh token' }
-      });
-      return;
-    }
-
     logger.error('Token refresh error:', error);
 
-    if (error.statusCode) {
-      res.status(error.statusCode).json({
+    if (error instanceof APIError) {
+      res.status(Number(error.status)).json({
         success: false,
         error: { message: error.message }
       });
@@ -193,26 +171,40 @@ export const refreshToken = async (req: Request, res: Response): Promise<void> =
 
 export const logout = async (req: Request, res: Response): Promise<void> => {
   try {
-    // Get session from request headers
-    await auth.api.signOut({
-      headers: fromNodeHeaders(req.headers),
-      method: 'POST'
-    });
+    const headers = fromNodeHeaders(req.headers);
 
-    // Clear any session cookies if using them
+    let session;
+    try {
+       session = await auth.api.getSession({ headers });
+      if (session) {
+        await auth.api.signOut({ headers });
+        logger.info('User logged out successfully', { userId: session.user.id });
+      }
+    } catch (error) {
+      if (error instanceof APIError && error.status === 401) {
+        logger.warn('Logout attempted with no active session');
+      } else {
+        throw error;
+      }
+    }
+
     res.clearCookie('session');
-    
-    res.status(200).json({
+    res.json({
       success: true,
-      message: 'Logout successful'
+      message: 'Successfully logged out',
+      data: {
+        userId: session?.user.id,
+        email: session?.user.email
+      }
     });
-
   } catch (error) {
     logger.error('Logout error:', error);
-    // Even if there's an error, we should return success for logout
-    res.status(200).json({
-      success: true,
-      message: 'Logout successful'
+    const status = error instanceof APIError ? Number(error.status) : 500;
+    const message = error instanceof APIError ? error.message : 'Error during logout';
+
+    res.status(status).json({
+      success: false,
+      error: { message }
     });
   }
 };

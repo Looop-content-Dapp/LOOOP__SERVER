@@ -4,6 +4,8 @@ import { logger } from '@/utils/logger';
 import { createError } from '@/middleware/errorHandler';
 import { validateUsername, validateUrl, sanitizeInput } from '@/utils/validation';
 import { AuthenticatedRequest } from '@/middleware/auth';
+import { deleteAvatar } from '@/middleware/upload';
+import { PreferencesService } from '@/services/preferences.service';
 
 /**
  * Get user profile
@@ -107,19 +109,42 @@ export const updateUserProfile = async (req: AuthenticatedRequest, res: Response
       }
       
       if (username) {
-        // Check if username is already taken
-        const existingUser = await prisma.user.findFirst({
-          where: {
-            username: username.toLowerCase(),
-            NOT: { id: userId }
-          }
+        // Get current user to check last username change
+        const currentUser = await prisma.user.findUnique({
+          where: { id: userId },
+          select: { username: true, lastUsernameChangeAt: true }
         });
 
-        if (existingUser) {
-          throw createError('Username already taken', 409);
+        if (!currentUser) {
+          throw createError('User not found', 404);
         }
 
-        updateData.username = username.toLowerCase();
+        // Check if username is being changed
+        if (currentUser.username !== username.toLowerCase()) {
+          // Check if user has changed username in the last 30 days
+          if (currentUser.lastUsernameChangeAt) {
+            const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+            if (currentUser.lastUsernameChangeAt > thirtyDaysAgo) {
+              const nextChangeDate = new Date(currentUser.lastUsernameChangeAt.getTime() + 30 * 24 * 60 * 60 * 1000);
+              throw createError(`Username can only be changed once every 30 days. Next change available on ${nextChangeDate.toDateString()}`, 400);
+            }
+          }
+
+          // Check if username is already taken
+          const existingUser = await prisma.user.findFirst({
+            where: {
+              username: username.toLowerCase(),
+              NOT: { id: userId }
+            }
+          });
+
+          if (existingUser) {
+            throw createError('Username already taken', 409);
+          }
+
+          updateData.username = username.toLowerCase();
+          updateData.lastUsernameChangeAt = new Date();
+        }
       } else {
         updateData.username = null;
       }
@@ -194,41 +219,23 @@ export const getUserPreferences = async (req: AuthenticatedRequest, res: Respons
       throw createError('User not authenticated', 401);
     }
 
-    // For now, we'll return default preferences since we don't have a preferences table yet
-    // This can be extended later with a proper preferences model
-    const defaultPreferences = {
-      notifications: {
-        email: true,
-        push: true,
-        newFollowers: true,
-        newComments: true,
-        newLikes: true,
-        trackUpdates: true
-      },
-      privacy: {
-        profileVisibility: 'public',
-        showEmail: false,
-        showLastSeen: true,
-        allowMessages: true
-      },
-      audio: {
-        quality: 'high',
-        autoplay: true,
-        crossfade: false
-      },
-      display: {
-        theme: 'auto',
-        language: 'en'
-      }
-    };
+    const preferences = await PreferencesService.getUserPreferences(userId);
 
     res.status(200).json({
       success: true,
-      data: { preferences: defaultPreferences }
+      data: { preferences }
     });
 
   } catch (error) {
     logger.error('Error retrieving user preferences:', error);
+
+    if (error.statusCode) {
+      res.status(error.statusCode).json({
+        success: false,
+        error: { message: error.message }
+      });
+      return;
+    }
 
     res.status(500).json({
       success: false,
@@ -254,15 +261,14 @@ export const updateUserPreferences = async (req: AuthenticatedRequest, res: Resp
       throw createError('Invalid preferences data', 400);
     }
 
-    // For now, we'll just return success since we don't have a preferences table yet
-    // This should be implemented with proper preferences storage
+    const updatedPreferences = await PreferencesService.updateUserPreferences(userId, preferences);
     
     logger.info('User preferences updated', { userId });
 
     res.status(200).json({
       success: true,
       message: 'Preferences updated successfully',
-      data: { preferences }
+      data: { preferences: updatedPreferences }
     });
 
   } catch (error) {
@@ -432,6 +438,179 @@ export const deleteUserAccount = async (req: AuthenticatedRequest, res: Response
 
   } catch (error) {
     logger.error('Error deleting user account:', error);
+
+    if (error.statusCode) {
+      res.status(error.statusCode).json({
+        success: false,
+        error: { message: error.message }
+      });
+      return;
+    }
+
+    res.status(500).json({
+      success: false,
+      error: { message: 'Internal server error' }
+    });
+  }
+};
+
+/**
+ * Upload user avatar
+ */
+export const uploadUserAvatar = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?.id;
+    
+    if (!userId) {
+      throw createError('User not authenticated', 401);
+    }
+
+    if (!req.uploadResult) {
+      throw createError('No file uploaded', 400);
+    }
+
+    const { secure_url, public_id } = req.uploadResult;
+
+    // Get current user to check if they have an existing avatar
+    const currentUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { image: true }
+    });
+
+    if (!currentUser) {
+      throw createError('User not found', 404);
+    }
+
+    // If user has an existing avatar, delete it from Cloudinary
+    if (currentUser.image) {
+      try {
+        // Extract public_id from existing image URL
+        const urlParts = currentUser.image.split('/');
+        const fileWithExtension = urlParts[urlParts.length - 1];
+        const existingPublicId = `avatars/${fileWithExtension.split('.')[0]}`;
+        await deleteAvatar(existingPublicId);
+      } catch (deleteError) {
+        logger.warn('Failed to delete existing avatar from Cloudinary', { 
+          userId, 
+          existingImage: currentUser.image,
+          error: deleteError 
+        });
+      }
+    }
+
+    // Update user with new avatar
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data: { image: secure_url },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        username: true,
+        image: true,
+        updatedAt: true
+      }
+    });
+
+    logger.info('User avatar uploaded successfully', { 
+      userId, 
+      imageUrl: secure_url,
+      publicId: public_id 
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Avatar uploaded successfully',
+      data: { 
+        user: updatedUser,
+        upload: {
+          url: secure_url,
+          publicId: public_id
+        }
+      }
+    });
+
+  } catch (error) {
+    logger.error('Error uploading user avatar:', error);
+
+    if (error.statusCode) {
+      res.status(error.statusCode).json({
+        success: false,
+        error: { message: error.message }
+      });
+      return;
+    }
+
+    res.status(500).json({
+      success: false,
+      error: { message: 'Internal server error' }
+    });
+  }
+};
+
+/**
+ * Remove user avatar
+ */
+export const removeUserAvatar = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?.id;
+    
+    if (!userId) {
+      throw createError('User not authenticated', 401);
+    }
+
+    // Get current user to check if they have an avatar
+    const currentUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { image: true }
+    });
+
+    if (!currentUser) {
+      throw createError('User not found', 404);
+    }
+
+    if (!currentUser.image) {
+      throw createError('No avatar to remove', 400);
+    }
+
+    // Extract public_id from image URL and delete from Cloudinary
+    try {
+      const urlParts = currentUser.image.split('/');
+      const fileWithExtension = urlParts[urlParts.length - 1];
+      const publicId = `avatars/${fileWithExtension.split('.')[0]}`;
+      
+      const deleteSuccess = await deleteAvatar(publicId);
+      if (!deleteSuccess) {
+        logger.warn('Failed to delete avatar from Cloudinary', { userId, publicId });
+      }
+    } catch (deleteError) {
+      logger.error('Error deleting avatar from Cloudinary:', deleteError);
+    }
+
+    // Update user to remove avatar
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data: { image: null },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        username: true,
+        image: true,
+        updatedAt: true
+      }
+    });
+
+    logger.info('User avatar removed successfully', { userId });
+
+    res.status(200).json({
+      success: true,
+      message: 'Avatar removed successfully',
+      data: { user: updatedUser }
+    });
+
+  } catch (error) {
+    logger.error('Error removing user avatar:', error);
 
     if (error.statusCode) {
       res.status(error.statusCode).json({

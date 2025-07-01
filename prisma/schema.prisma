@@ -21,10 +21,11 @@ model User {
   updatedAt     DateTime @updatedAt
 
   // Additional fields for LOOOP platform
-  username    String?   @unique
-  bio         String?
-  isVerified  Boolean   @default(false)
-  lastLoginAt DateTime?
+  username            String?   @unique
+  bio                 String?
+  isVerified          Boolean   @default(false)
+  lastLoginAt         DateTime?
+  lastUsernameChangeAt DateTime?
 
   // Better Auth relations
   accounts Account[]

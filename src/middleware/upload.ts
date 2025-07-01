@@ -47,12 +47,13 @@ const upload = multer({
 export const asyncUploadAvatar = asyncHandler(upload.single('avatar'));
 
 // Middleware to handle upload errors and return secure URL + public_id
-export const handleAvatarUpload = (req: Request, res: Response, next: NextFunction) => {
+export const handleAvatarUpload = (req: Request, res: Response, next: NextFunction): void => {
   if (!req.file) {
-    return res.status(400).json({
+    res.status(400).json({
       success: false,
       message: 'No file uploaded'
     });
+    return;
   }
 
   // Extract information from the uploaded file

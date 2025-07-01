@@ -2,7 +2,6 @@ import { Request, Response, NextFunction } from 'express';
 import { auth } from '@/config/auth';
 import { logger } from '@/utils/logger';
 import { fromNodeHeaders } from 'better-auth/node';
-import { prisma } from '@/config/database';
 
 export interface AuthenticatedRequest extends Request {
   user?: {
@@ -23,33 +22,16 @@ export interface AuthenticatedRequest extends Request {
   };
 }
 
-// Helper function to convert Express headers to Web API Headers
-export function createHeaders(expressHeaders: any): Headers {
-  const headers = new Headers();
-
-  for (const [key, value] of Object.entries(expressHeaders)) {
-    if (typeof value === 'string') {
-      headers.set(key, value);
-    } else if (Array.isArray(value)) {
-      headers.set(key, value.join(', '));
-    }
-  }
-
-  return headers;
-}
-
 export const requireAuth = async (
   req: AuthenticatedRequest,
   res: Response,
   next: NextFunction
 ): Promise<void> => {
   try {
-    const session = await auth.api.getSession({
-      headers: createHeaders(req.headers),
-    });
-    console.log("session", session);
+    const headers = fromNodeHeaders(req.headers);
+    const session = await auth.api.getSession({ headers });
 
-    if (!session) {
+    if (!session || !session.user) {
       res.status(401).json({
         success: false,
         error: {
@@ -59,12 +41,18 @@ export const requireAuth = async (
       return;
     }
 
-    // Attach user and session to request with isVerified property
+    // Attach user and session to request
     req.user = {
       ...session.user,
       isVerified: session.user.emailVerified || false
     };
-    req.session = session.session;
+
+    req.session = {
+      id: session.user.id,
+      token: session.session.token,
+      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
+      userId: session.user.id
+    };
 
     next();
   } catch (error) {
@@ -80,20 +68,24 @@ export const requireAuth = async (
 
 export const optionalAuth = async (
   req: AuthenticatedRequest,
-  _res: Response,
+  res: Response,
   next: NextFunction
 ): Promise<void> => {
   try {
-    const session = await auth.api.getSession({
-      headers: createHeaders(req.headers)
-    });
+    const headers = fromNodeHeaders(req.headers);
+    const session = await auth.api.getSession({ headers });
 
-    if (session) {
+    if (session && session.user) {
       req.user = {
         ...session.user,
         isVerified: session.user.emailVerified || false
       };
-      req.session = session.session;
+      req.session = {
+        id: session.user.id,
+        token: session.session.token,
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
+        userId: session.user.id
+      };
     }
 
     next();
