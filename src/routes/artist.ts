@@ -11,6 +11,14 @@ import {
   validateArtistId
 } from '@/middleware/artistValidation';
 
+// Enhanced validation middleware
+import {
+  validateArtistClaimSubmission,
+  validateClaimStatusUpdate,
+  validateLegacyArtistClaim,
+  handleValidationErrors as handleNewValidationErrors
+} from '@/middleware/artistClaimValidation';
+
 // Import artist controllers
 import {
   getArtistProfile,
@@ -20,11 +28,17 @@ import {
 } from '@/controllers/artist/profile';
 
 import {
+  // Enhanced controllers
+  submitArtistClaim,
+  searchArtistsForClaim,
+  updateClaimStatus,
+  // Legacy controllers
   claimArtistProfile,
   getUserClaims,
   getPendingClaims,
   approveArtistClaim,
-  rejectArtistClaim
+  rejectArtistClaim,
+  getClaimStatus
 } from '@/controllers/artist/claims';
 
 import {
@@ -51,11 +65,37 @@ router.put('/my-profile', validateArtistProfile,asyncHandler(handleValidationErr
 router.get('/my-analytics', asyncHandler(getMyArtistAnalytics));
 router.post('/analytics/update', asyncHandler(updateDailyAnalytics));
 
-// Artist claiming system
-router.post('/claim', validateArtistClaim, asyncHandler(handleValidationErrors), asyncHandler(claimArtistProfile));
-router.get('/my-claims', asyncHandler(getUserClaims));
+// Step 1: Search for Artists
+router.get('/claim/search', asyncHandler(searchArtistsForClaim));
 
-// Admin routes (TODO: Add admin middleware)
+// Step 2: Submit Comprehensive Claim
+router.post('/claim/submit',
+  validateArtistClaimSubmission,
+  handleNewValidationErrors,
+  asyncHandler(submitArtistClaim)
+);
+
+// Step 3: Get Claim Status
+router.get('/claim/status', asyncHandler(getClaimStatus));
+
+// Get user's claim history
+router.get('/claims/my', asyncHandler(getUserClaims));
+
+// Admin routes for claim management
+router.put('/admin/claims/:claimId/status',
+  validateClaimStatusUpdate,
+  handleNewValidationErrors,
+  asyncHandler(updateClaimStatus)
+);
+
+// Legacy Artist claiming system (Backward compatibility)
+router.post('/claim',
+  validateLegacyArtistClaim,
+  handleNewValidationErrors,
+  asyncHandler(claimArtistProfile)
+);
+
+// Legacy Admin routes (TODO: Add admin middleware)
 router.get('/admin/claims/pending', asyncHandler(getPendingClaims));
 router.put('/admin/claims/:claimId/approve', validateClaimId, asyncHandler(handleValidationErrors), asyncHandler(approveArtistClaim));
 router.put('/admin/claims/:claimId/reject',

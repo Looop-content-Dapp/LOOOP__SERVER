@@ -490,17 +490,46 @@ model ArtistClaim {
   id          String   @id @default(cuid())
   userId      String
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Artist information
+  artistId    String?
+  artist      Artist?  @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  artistName  String   // For new artist claims
+  
+  // Claimant information
+  role        String   // artist, manager, label_rep, band_member, etc.
+  fullName    String
   email       String
-  artistId    String
-  artist      Artist   @relation(fields: [artistId], references: [id], onDelete: Cascade)
-  status      String   @default("pending")
-  evidenceUrl String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  phone       String?
+  companyName String?
+  
+  // Verification data
+  officialEmail     String?
+  websiteUrl        String?
+  socialLinks       Json?     // Instagram, Twitter, TikTok, Facebook, etc.
+  distributorInfo   Json?     // DistroKid, TuneCore, AWAL integration data
+  connectionDetails String?   // How they're connected to the artist
+  evidenceUrls      String[]  // Multiple evidence URLs
+  
+  // Status and processing
+  status            String   @default("pending") // pending, under_review, approved, rejected, info_required
+  submissionType    String   @default("manual") // manual, distributor_verified
+  reviewNotes       String?
+  rejectionReason   String?
+  adminUserId       String?
+  
+  // Timestamps
+  submittedAt       DateTime @default(now())
+  reviewedAt        DateTime?
+  approvedAt        DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   @@index([userId])
   @@index([artistId])
   @@index([status])
+  @@index([email])
+  @@index([artistName])
   @@map("artist_claims")
 }
 

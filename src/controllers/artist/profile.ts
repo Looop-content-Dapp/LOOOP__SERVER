@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { logger } from '@/utils/logger';
 import { createError } from '@/middleware/errorHandler';
-import { validateEmail, validateUrl, sanitizeInput } from '@/utils/validation';
+import { validateUrl, sanitizeInput } from '@/utils/validation';
 import { AuthenticatedRequest } from '@/middleware/auth';
 import { ArtistService } from '@/services/artist.service';
 
@@ -189,10 +189,10 @@ export const updateArtistProfile = async (req: AuthenticatedRequest, res: Respon
 
     const updatedArtist = await ArtistService.updateArtistProfile(artist.id, updateData);
 
-    logger.info('Artist profile updated', { 
-      userId, 
-      artistId: artist.id, 
-      updatedFields: Object.keys(updateData) 
+    logger.info('Artist profile updated', {
+      userId,
+      artistId: artist.id,
+      updatedFields: Object.keys(updateData)
     });
 
     res.status(200).json({

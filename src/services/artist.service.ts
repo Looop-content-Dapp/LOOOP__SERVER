@@ -1,6 +1,16 @@
 import { prisma } from '@/config/database';
 import { logger } from '@/utils/logger';
 import { createError } from '@/middleware/errorHandler';
+import {
+  ArtistClaimRequest,
+  ArtistClaimResponse,
+  ArtistClaimFull,
+  ArtistSearchResult,
+  ClaimStatus,
+  ClaimStatistics,
+  ArtistClaimSearchFilters,
+  AdminClaimAction
+} from '@/types/artist-claim.types';
 
 export interface ArtistProfile {
   id: string;
@@ -31,7 +41,8 @@ export interface ArtistProfile {
   updatedAt: Date;
 }
 
-export interface ArtistClaimRequest {
+// Legacy interface for backward compatibility
+export interface LegacyArtistClaimRequest {
   email: string;
   artistId: string;
   evidenceUrl?: string;
@@ -53,6 +64,303 @@ export interface ArtistAnalytics {
 }
 
 export class ArtistService {
+  /**
+   * Search for artists (Step 3 in Spotify flow: Search & Select Your Artist Profile)
+   */
+  public static async searchArtistsForClaim(query: string, limit = 20): Promise<ArtistSearchResult[]> {
+    try {
+      const artists = await prisma.artist.findMany({
+        where: {
+          AND: [
+            { isActive: true },
+            {
+              OR: [
+                { name: { contains: query, mode: 'insensitive' } },
+                { genres: { hasSome: [query] } },
+                { labels: { hasSome: [query] } }
+              ]
+            }
+          ]
+        },
+        select: {
+          id: true,
+          name: true,
+          profileImage: true,
+          verified: true,
+          followers: true,
+          monthlyListeners: true,
+          socialLinks: true,
+          claimedAt: true,
+          createdAt: true,
+          tracks: {
+            select: {
+              id: true,
+              title: true,
+              createdAt: true,
+              artworkUrl: true
+            },
+            orderBy: { createdAt: 'desc' },
+            take: 3
+          }
+        },
+        orderBy: [
+          { verified: 'desc' },
+          { monthlyListeners: 'desc' },
+          { followers: 'desc' }
+        ],
+        take: limit
+      });
+
+      const searchResults: ArtistSearchResult[] = artists.map(artist => ({
+        id: artist.id,
+        name: artist.name,
+        profileImage: artist.profileImage || undefined,
+        followers: artist.followers,
+        monthlyListeners: artist.monthlyListeners,
+        verified: artist.verified,
+        recentReleases: artist.tracks.map(track => ({
+          id: track.id,
+          title: track.title,
+          releaseDate: track.createdAt.toISOString(),
+          artworkUrl: track.artworkUrl || undefined
+        })),
+        socialLinks: artist.socialLinks as any,
+        isClaimed: !!artist.claimedAt,
+        claimedAt: artist.claimedAt?.toISOString()
+      }));
+
+      logger.info('Artist search for claims completed', { query, results: searchResults.length });
+      return searchResults;
+    } catch (error) {
+      logger.error('Error searching artists for claims:', error);
+      throw createError('Failed to search artists', 500);
+    }
+  }
+
+  /**
+   * Submit comprehensive artist claim (Following Spotify's step-by-step flow)
+   */
+  public static async submitArtistClaim(
+    userId: string,
+    claimData: ArtistClaimRequest
+  ): Promise<ArtistClaimResponse> {
+    try {
+      // Validation
+      if (!claimData.agreesToTerms || !claimData.agreesToPrivacy) {
+        throw createError('You must agree to the terms and privacy policy', 400);
+      }
+
+      // Check if user already has an artist profile
+      const existingArtist = await prisma.artist.findFirst({
+        where: { userId }
+      });
+
+      if (existingArtist) {
+        throw createError('You already have an artist profile', 409);
+      }
+
+      // Check for existing pending claims for this user
+      const existingUserClaim = await prisma.artistClaim.findFirst({
+        where: {
+          userId,
+          status: { in: ['pending', 'under_review', 'info_required'] }
+        }
+      });
+
+      if (existingUserClaim) {
+        throw createError('You already have a pending claim request', 409);
+      }
+
+      // For existing artists, check if already claimed
+      if (claimData.artistId) {
+        const targetArtist = await prisma.artist.findUnique({
+          where: { id: claimData.artistId }
+        });
+
+        if (!targetArtist) {
+          throw createError('Artist not found', 404);
+        }
+
+        if (targetArtist.claimedAt) {
+          throw createError('This artist profile has already been claimed', 409);
+        }
+
+        // Check for existing claims on this artist
+        const existingArtistClaim = await prisma.artistClaim.findFirst({
+          where: {
+            artistId: claimData.artistId,
+            status: { in: ['pending', 'under_review', 'approved'] }
+          }
+        });
+
+        if (existingArtistClaim) {
+          throw createError('This artist profile already has a pending or approved claim', 409);
+        }
+      }
+
+      // Generate tracking number
+      const trackingNumber = `AC-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
+
+      // Determine submission type
+      const submissionType = claimData.distributorInfo?.isVerified ? 'distributor_verified' : 'manual';
+      const initialStatus = submissionType === 'distributor_verified' ? 'under_review' : 'pending';
+
+      // Create comprehensive claim
+      const claim = await prisma.artistClaim.create({
+        data: {
+          userId,
+          artistId: claimData.artistId || null, // Handle empty string case
+          artistName: claimData.artistName,
+          role: claimData.role,
+          fullName: claimData.fullName,
+          email: claimData.email,
+          phone: claimData.phone || null,
+          companyName: claimData.companyName || null,
+          officialEmail: claimData.officialEmail || null,
+          websiteUrl: claimData.websiteUrl || null,
+          socialLinks: claimData.socialLinks as any,
+          distributorInfo: claimData.distributorInfo as any,
+          connectionDetails: claimData.connectionDetails || null,
+          evidenceUrls: claimData.evidenceUrls || [],
+          status: initialStatus,
+          submissionType,
+          submittedAt: new Date()
+        }
+      });
+
+      const estimatedReviewTime = submissionType === 'distributor_verified' ? '1-2 business days' : '1-3 business days';
+      const message = submissionType === 'distributor_verified'
+        ? 'Your claim has been submitted with distributor verification. Our team will review it shortly.'
+        : 'Your artist claim has been submitted successfully. Our team will review your request and get back to you soon.';
+
+      const response: ArtistClaimResponse = {
+        id: claim.id,
+        status: claim.status as ClaimStatus,
+        artistName: claim.artistName,
+        artistId: claim.artistId || undefined,
+        submittedAt: claim.submittedAt.toISOString(),
+        estimatedReviewTime,
+        message,
+        trackingNumber
+      };
+
+      // TODO: Send confirmation email
+      // await this.sendClaimConfirmationEmail(claim);
+
+      // TODO: Notify admin team
+      // await this.notifyAdminTeam(claim);
+
+      logger.info('Artist claim submitted successfully', {
+        userId,
+        claimId: claim.id,
+        artistName: claim.artistName,
+        submissionType,
+        trackingNumber
+      });
+
+      return response;
+    } catch (error) {
+      logger.error('Error submitting artist claim:', error);
+      if (error.statusCode) {
+        throw error;
+      }
+      throw createError('Failed to submit artist claim', 500);
+    }
+  }
+
+  /**
+   * Get user's claim history
+   */
+  public static async getUserClaims(userId: string): Promise<ArtistClaimFull[]> {
+    try {
+      const claims = await prisma.artistClaim.findMany({
+        where: { userId },
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              image: true
+            }
+          },
+          artist: {
+            select: {
+              id: true,
+              name: true,
+              profileImage: true,
+              verified: true,
+              followers: true,
+              monthlyListeners: true,
+              socialLinks: true
+            }
+          }
+        },
+        orderBy: { submittedAt: 'desc' }
+      });
+
+      const fullClaims: ArtistClaimFull[] = claims.map(claim => {
+        const daysInReview = Math.floor(
+          (new Date().getTime() - claim.submittedAt.getTime()) / (1000 * 60 * 60 * 24)
+        );
+
+        const canResubmit = claim.status === 'rejected' || claim.status === 'info_required';
+        const trackingNumber = `AC-${claim.submittedAt.getTime()}-${claim.id.slice(-9).toUpperCase()}`;
+        const estimatedReviewTime = claim.submissionType === 'distributor_verified' ? '1-2 business days' : '1-3 business days';
+
+        return {
+          id: claim.id,
+          userId: claim.userId,
+          user: claim.user,
+          artistId: claim.artistId || undefined,
+          artist: claim.artist ? {
+            id: claim.artist.id,
+            name: claim.artist.name,
+            profileImage: claim.artist.profileImage || undefined,
+            followers: claim.artist.followers,
+            monthlyListeners: claim.artist.monthlyListeners,
+            verified: claim.artist.verified,
+            socialLinks: claim.artist.socialLinks as any,
+            isClaimed: true,
+            claimedAt: undefined // Will be filled if needed
+          } : undefined,
+          artistName: claim.artistName,
+          role: claim.role as any,
+          fullName: claim.fullName,
+          email: claim.email,
+          phone: claim.phone || undefined,
+          companyName: claim.companyName || undefined,
+          officialEmail: claim.officialEmail || undefined,
+          websiteUrl: claim.websiteUrl || undefined,
+          socialLinks: claim.socialLinks as any,
+          distributorInfo: claim.distributorInfo as any,
+          connectionDetails: claim.connectionDetails || undefined,
+          evidenceUrls: claim.evidenceUrls,
+          status: claim.status as ClaimStatus,
+          submissionType: claim.submissionType as any,
+          reviewNotes: claim.reviewNotes || undefined,
+          rejectionReason: claim.rejectionReason || undefined,
+          adminUserId: claim.adminUserId || undefined,
+          submittedAt: claim.submittedAt.toISOString(),
+          reviewedAt: claim.reviewedAt?.toISOString(),
+          approvedAt: claim.approvedAt?.toISOString(),
+          createdAt: claim.createdAt.toISOString(),
+          updatedAt: claim.updatedAt.toISOString(),
+          trackingNumber,
+          estimatedReviewTime,
+          canResubmit,
+          daysInReview
+        };
+      });
+
+      logger.info('User claims retrieved', { userId, count: fullClaims.length });
+      return fullClaims;
+    } catch (error) {
+      logger.error('Error retrieving user claims:', error);
+      throw createError('Failed to retrieve claims', 500);
+    }
+  }
+
   /**
    * Get artist profile by ID
    */
@@ -157,12 +465,49 @@ export class ArtistService {
     }
   }
 
+  public static async getClaimStatus(userId: string): Promise<ClaimStatus> {
+    try {
+      const claims = await prisma.artistClaim.findMany({
+        where: { userId },
+        select: { status: true }
+      });
+
+      if (claims.length === 0) {
+        return 'pending';
+      }
+
+      const statuses = claims.map((claim) => claim.status);
+
+      if (statuses.includes('approved')) {
+        return 'approved';
+      }
+
+      if (statuses.includes('rejected')) {
+        return 'rejected';
+      }
+
+      if (statuses.includes('pending')) {
+        return 'pending';
+      }
+
+      if (statuses.includes('info_required')) {
+        return 'info_required';
+      }
+
+      return 'pending';
+    } catch (error) {
+      logger.error('Error retrieving claim status:', error);
+      throw createError('Failed to retrieve claim status', 500);
+    }
+  }
+
   /**
-   * Create artist profile (claiming process)
+   * Create artist profile (legacy claiming process - deprecated)
+   * @deprecated Use submitArtistClaim instead
    */
   public static async claimArtistProfile(
     userId: string,
-    claimData: ArtistClaimRequest
+    claimData: LegacyArtistClaimRequest
   ): Promise<{ claim: any; artist: ArtistProfile }> {
     try {
       // Check if user already has an artist profile
@@ -200,14 +545,19 @@ export class ArtistService {
         throw createError('Artist profile has already been claimed', 409);
       }
 
-      // Create claim request
+      // Create legacy claim request (minimal data)
       const claim = await prisma.artistClaim.create({
         data: {
           userId,
-          email: claimData.email,
           artistId: claimData.artistId,
-          evidenceUrl: claimData.evidenceUrl,
-          status: 'pending'
+          artistName: targetArtist.name,
+          role: 'artist', // Default role
+          fullName: 'Unknown', // Default value
+          email: claimData.email,
+          evidenceUrls: claimData.evidenceUrl ? [claimData.evidenceUrl] : [],
+          status: 'pending',
+          submissionType: 'manual',
+          submittedAt: new Date()
         },
         include: {
           user: {
@@ -227,15 +577,15 @@ export class ArtistService {
         }
       });
 
-      logger.info('Artist claim request created', { 
-        userId, 
+      logger.info('Legacy artist claim request created', {
+        userId,
         artistId: claimData.artistId,
-        claimId: claim.id 
+        claimId: claim.id
       });
 
       return { claim, artist: targetArtist as ArtistProfile };
     } catch (error) {
-      logger.error('Error creating artist claim:', error);
+      logger.error('Error creating legacy artist claim:', error);
       if (error.statusCode) {
         throw error;
       }
@@ -294,10 +644,10 @@ export class ArtistService {
 
       const updatedArtist = await this.getArtistProfile(claim.artistId);
 
-      logger.info('Artist claim approved', { 
-        claimId, 
-        userId: claim.userId, 
-        artistId: claim.artistId 
+      logger.info('Artist claim approved', {
+        claimId,
+        userId: claim.userId,
+        artistId: claim.artistId
       });
 
       return updatedArtist;
@@ -329,15 +679,15 @@ export class ArtistService {
 
       await prisma.artistClaim.update({
         where: { id: claimId },
-        data: { 
+        data: {
           status: 'rejected',
           // You could add a rejection reason field to the schema
         }
       });
 
-      logger.info('Artist claim rejected', { 
-        claimId, 
-        reason: reason || 'No reason provided' 
+      logger.info('Artist claim rejected', {
+        claimId,
+        reason: reason || 'No reason provided'
       });
     } catch (error) {
       logger.error('Error rejecting artist claim:', error);
@@ -394,9 +744,9 @@ export class ArtistService {
         }
       });
 
-      logger.info('Artist profile updated', { 
-        artistId, 
-        updatedFields: Object.keys(allowedData) 
+      logger.info('Artist profile updated', {
+        artistId,
+        updatedFields: Object.keys(allowedData)
       });
 
       return updatedArtist as ArtistProfile;
