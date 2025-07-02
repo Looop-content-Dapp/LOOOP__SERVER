@@ -92,7 +92,7 @@ This MVP focuses on core functionality for a music streaming platform with basic
 #### Medium Priority
 - [ ] **Real-time Features (Basic)**
   - [ ] WebSocket connection setup
-  - [ ] Real-time notifications for follows/likes
+  - [ ] Real-time notifications for follows/likes, comments
   - [ ] Live activity feed updates
 
 ### Phase 4: NFT Integration (Week 7-8)

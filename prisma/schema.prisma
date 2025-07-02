@@ -10,12 +10,26 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// Enum definitions for admin system
+enum UserRole {
+  USER
+  ADMIN
+  SUPER_ADMIN
+  MODERATOR
+}
+
+enum AdminLevel {
+  MODERATOR     // Can moderate content, approve basic requests
+  ADMIN         // Can approve artist claims, manage users, create playlists
+  SUPER_ADMIN   // Full system access, can promote/demote admins
+}
+
 // User model for LOOOP platform
 model User {
   id            String   @id @default(cuid())
   name          String
   email         String   @unique
-  password      String   @unique  @default("")
+  password      String
   emailVerified Boolean  @default(false)
   image         String?
   username      String?  @unique
@@ -25,6 +39,15 @@ model User {
   lastUsernameChangeAt DateTime?
   DateOfBirth   DateTime?
   country       String?
+  
+  // Admin roles and permissions
+  role          UserRole @default(USER)
+  permissions   String[] @default([])
+  isAdmin       Boolean  @default(false)
+  adminLevel    AdminLevel? // Super admin, admin, moderator
+  adminApprovedAt DateTime?
+  adminApprovedBy String?
+  
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

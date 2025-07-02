@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { requireAuth, optionalAuth } from '@/middleware/auth';
 import { asyncHandler } from '@/middleware/errorHandler';
+import { adminWithPermission } from '@/middleware/adminAuth';
 import {
   handleValidationErrors,
   validateArtistClaim,
@@ -83,6 +84,8 @@ router.get('/claims/my', asyncHandler(getUserClaims));
 
 // Admin routes for claim management
 router.put('/admin/claims/:claimId/status',
+  requireAuth,
+  adminWithPermission('canApproveArtistClaims'),
   validateClaimStatusUpdate,
   handleNewValidationErrors,
   asyncHandler(updateClaimStatus)

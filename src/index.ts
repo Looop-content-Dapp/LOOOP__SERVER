@@ -23,6 +23,7 @@ import artistRoutes from '@/routes/artist';
 import communityRoutes from '@/routes/community';
 import nftRoutes from '@/routes/nft';
 import socialRoutes from '@/routes/social';
+import adminRoutes from '@/routes/admin';
 
 const app = express();
 const server = createServer(app);
@@ -59,13 +60,14 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Routes
 
-app.use('/api/v1/auth', authRoutes); // Custom auth routes - disabled to avoid conflicts
+app.use('/api/v1/auth', authRoutes); // Custom auth routes
 app.use('/api/v1/users', userRoutes);
 app.use('/api/v1/music', musicRoutes);
 app.use('/api/v1/artists', artistRoutes);
 app.use('/api/v1/communities', communityRoutes);
 app.use('/api/v1/nfts', nftRoutes);
 app.use('/api/v1/social', socialRoutes);
+app.use('/api/v1/admin', adminRoutes); // Admin routes
 
 // Health check
 app.get('/health', (_req: Request, res: Response) => {

@@ -1,0 +1,311 @@
+{
+    "info": {
+        "_postman_id": "looop-admin-api",
+        "name": "LOOOP Admin API",
+        "description": "Collection for testing LOOOP Music admin endpoints",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "item": [
+        {
+            "name": "Admin Registration",
+            "item": [
+                {
+                    "name": "Register Admin",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/admin/register",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "admin",
+                                "register"
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"name\": \"Test Admin\",\n  \"email\": \"admin@looopmusic.com\",\n  \"password\": \"securePassword123\",\n  \"adminLevel\": \"MODERATOR\",\n  \"justification\": \"Testing admin registration\"\n}"
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Admin Management",
+            "item": [
+                {
+                    "name": "Get Admin Profile",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{admin_token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/admin/profile",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "admin",
+                                "profile"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Get Dashboard Stats",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{admin_token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/admin/dashboard/stats",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "admin",
+                                "dashboard",
+                                "stats"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Get All Admins",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{admin_token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/admin/admins",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "admin",
+                                "admins"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Get Pending Admin Registrations",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{admin_token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/admin/admins/pending",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "admin",
+                                "admins",
+                                "pending"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Approve Admin",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{admin_token}}"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/admin/admins/{{userId}}/approve",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "admin",
+                                "admins",
+                                "{{userId}}",
+                                "approve"
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"adminLevel\": \"ADMIN\",\n  \"permissions\": [\"canApproveArtistClaims\", \"canManageUsers\", \"canCreatePlaylists\"]\n}"
+                        }
+                    }
+                },
+                {
+                    "name": "Update Admin Permissions",
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{admin_token}}"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/admin/admins/{{userId}}/permissions",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "admin",
+                                "admins",
+                                "{{userId}}",
+                                "permissions"
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"permissions\": [\"canModerateContent\", \"canViewAnalytics\", \"canCreatePlaylists\"]\n}"
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "User Management",
+            "item": [
+                {
+                    "name": "Ban User",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{admin_token}}"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/admin/users/{{userId}}/ban",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "admin",
+                                "users",
+                                "{{userId}}",
+                                "ban"
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"reason\": \"Violation of terms of service\",\n  \"duration\": 30\n}"
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Playlist Management",
+            "item": [
+                {
+                    "name": "Create Admin Playlist",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{admin_token}}"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/admin/playlists",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "admin",
+                                "playlists"
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"title\": \"Featured Playlist\",\n  \"description\": \"Curated by LOOOP admin team\",\n  \"isPublic\": true,\n  \"isFeatured\": true,\n  \"trackIds\": [\"track1\", \"track2\"],\n  \"tags\": [\"featured\", \"new\"],\n  \"artworkUrl\": \"https://example.com/artwork.jpg\"\n}"
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "System Health",
+            "item": [
+                {
+                    "name": "Health Check",
+                    "request": {
+                        "method": "GET",
+                        "url": {
+                            "raw": "{{base_url}}/admin/health",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "admin",
+                                "health"
+                            ]
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Variables",
+            "item": [
+                {
+                    "name": "Environment Variables",
+                    "request": {
+                        "method": "GET",
+                        "url": {
+                            "raw": ""
+                        }
+                    },
+                    "body": {
+                        "mode": "raw",
+                        "raw": "Variables to set in your environment:\n- base_url: Your API base URL (e.g., http://localhost:3000/api)\n- admin_token: JWT token for authenticated admin requests\n- userId: ID of the user/admin for specific operations"
+                    }
+                }
+            ]
+        }
+    ]
+}
