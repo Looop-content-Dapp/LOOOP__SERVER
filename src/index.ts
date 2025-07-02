@@ -16,7 +16,6 @@ import { logger } from '@/utils/logger';
 import { connectDatabase } from '@/config/database';
 
 // Import routes
-import authHandler from '@/routes/auth-handler';
 import authRoutes from '@/routes/auth';
 import userRoutes from '@/routes/user';
 import musicRoutes from '@/routes/music';
@@ -40,8 +39,6 @@ app.use(cors({
 }));
 
 const PORT = process.env.PORT || 5000;
-
-app.all('/api/auth/*splat', authHandler); // Better Auth - temporarily disabled for testing
 
 // Middleware
 app.use(helmet());

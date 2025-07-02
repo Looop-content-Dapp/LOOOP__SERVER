@@ -11,6 +11,10 @@ const prisma = new PrismaClient({
     { level: 'info', emit: 'stdout' },
     { level: 'warn', emit: 'stdout' },
   ],
+  transactionOptions: {
+    maxWait: 10000, // 10s max waiting time
+    timeout: 15000, // 15s timeout
+  },
 });
 
 // Log queries in development

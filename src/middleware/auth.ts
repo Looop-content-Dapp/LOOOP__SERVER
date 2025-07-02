@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
-import { auth } from '@/config/auth';
 import { logger } from '@/utils/logger';
-import { fromNodeHeaders } from 'better-auth/node';
+import { AuthService } from '@/services/auth.service';
+import { createError } from './errorHandler';
 
 export interface AuthenticatedRequest extends Request {
   user?: {
@@ -14,12 +14,6 @@ export interface AuthenticatedRequest extends Request {
     bio?: string;
     isVerified: boolean;
   };
-  session?: {
-    id: string;
-    expiresAt: Date;
-    token: string;
-    userId: string;
-  };
 }
 
 export const requireAuth = async (
@@ -28,30 +22,22 @@ export const requireAuth = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    const headers = fromNodeHeaders(req.headers);
-    const session = await auth.api.getSession({ headers });
+    const authHeader = req.headers.authorization;
 
-    if (!session || !session.user) {
-      res.status(401).json({
-        success: false,
-        error: {
-          message: 'Authentication required'
-        }
-      });
-      return;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      throw createError('Authentication required', 401);
     }
 
-    // Attach user and session to request
-    req.user = {
-      ...session.user,
-      isVerified: session.user.emailVerified || false
-    };
+    const token = authHeader.split(' ')[1];
+    const payload = AuthService.verifyToken(token);
 
-    req.session = {
-      id: session.user.id,
-      token: session.session.token,
-      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
-      userId: session.user.id
+    req.user = {
+      id: payload.userId,
+      email: payload.email,
+      name: payload.name,
+      username: payload.username,
+      emailVerified: payload.emailVerified,
+      isVerified: payload.isVerified
     };
 
     next();
@@ -72,19 +58,19 @@ export const optionalAuth = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    const headers = fromNodeHeaders(req.headers);
-    const session = await auth.api.getSession({ headers });
+    const authHeader = req.headers.authorization;
 
-    if (session && session.user) {
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      const payload = AuthService.verifyToken(token);
+
       req.user = {
-        ...session.user,
-        isVerified: session.user.emailVerified || false
-      };
-      req.session = {
-        id: session.user.id,
-        token: session.session.token,
-        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
-        userId: session.user.id
+        id: payload.userId,
+        email: payload.email,
+        name: payload.name,
+        username: payload.username,
+        emailVerified: payload.emailVerified,
+        isVerified: payload.isVerified
       };
     }
 

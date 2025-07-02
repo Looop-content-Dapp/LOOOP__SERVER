@@ -6,36 +6,25 @@ import { validatePartialPreferences, validatePreferencesUpdate } from '@/middlew
 
 // Import user controllers
 import {
-  getUserProfile,
-  updateUserProfile,
   getUserPreferences,
   updateUserPreferences,
   getUserStats,
-  deleteUserAccount,
   uploadUserAvatar,
   removeUserAvatar
 } from '@/controllers/user/profile';
 
 const router: Router = Router();
 
-// All user routes require authentication
-// router.use(requireAuth);
-
-// Profile management
-router.get('/profile', asyncHandler(getUserProfile));
-router.put('/profile', asyncHandler(updateUserProfile));
-router.delete('/profile', asyncHandler(deleteUserAccount));
-
 // User preferences
-router.get('/preferences', asyncHandler(getUserPreferences));
-router.put('/preferences', validatePartialPreferences, asyncHandler(updateUserPreferences));
+router.get('/preferences',requireAuth, asyncHandler(getUserPreferences));
+router.put('/preferences',requireAuth, validatePartialPreferences, asyncHandler(updateUserPreferences));
 
 // User statistics
-router.get('/stats', asyncHandler(getUserStats));
+router.get('/stats', requireAuth, asyncHandler(getUserStats));
 
 // Avatar management
-router.post('/avatar', asyncUploadAvatar, handleAvatarUpload, asyncHandler(uploadUserAvatar));
-router.delete('/avatar', asyncHandler(removeUserAvatar));
+router.post('/avatar', requireAuth, asyncUploadAvatar, handleAvatarUpload, asyncHandler(uploadUserAvatar));
+router.delete('/avatar', requireAuth, asyncHandler(removeUserAvatar));
 
 // Health check
 router.get('/health', (_req: Request, res: Response) => {

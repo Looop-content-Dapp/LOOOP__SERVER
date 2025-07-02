@@ -10,26 +10,23 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Better Auth User model
+// User model for LOOOP platform
 model User {
   id            String   @id @default(cuid())
   name          String
   email         String   @unique
+  password      String   @unique  @default("")
   emailVerified Boolean  @default(false)
   image         String?
+  username      String?  @unique
+  bio           String?
+  isVerified    Boolean  @default(false)
+  lastLoginAt   DateTime?
+  lastUsernameChangeAt DateTime?
+  DateOfBirth   DateTime?
+  country       String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
-
-  // Additional fields for LOOOP platform
-  username            String?   @unique
-  bio                 String?
-  isVerified          Boolean   @default(false)
-  lastLoginAt         DateTime?
-  lastUsernameChangeAt DateTime?
-
-  // Better Auth relations
-  accounts Account[]
-  sessions Session[]
 
   // LOOOP platform relations
   artist        Artist?
@@ -54,44 +51,7 @@ model User {
   @@map("user")
 }
 
-// Better Auth Account model for OAuth
-model Account {
-  id                    String    @id @default(cuid())
-  accountId             String
-  providerId            String
-  userId                String
-  accessToken           String?
-  refreshToken          String?
-  idToken               String?
-  accessTokenExpiresAt  DateTime?
-  refreshTokenExpiresAt DateTime?
-  scope                 String?
-  password              String?
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("account")
-}
-
-// Better Auth Session model
-model Session {
-  id        String   @id @default(cuid())
-  expiresAt DateTime
-  token     String   @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  ipAddress String?
-  userAgent String?
-  userId    String
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("session")
-}
-
-// Better Auth Verification model
+// Verification model for email verification and password reset
 model Verification {
   id         String   @id @default(cuid())
   identifier String

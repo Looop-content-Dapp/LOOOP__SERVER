@@ -8,213 +8,12 @@ import { deleteAvatar } from '@/middleware/upload';
 import { PreferencesService } from '@/services/preferences.service';
 
 /**
- * Get user profile
- */
-export const getUserProfile = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
-  try {
-    const userId = req.user?.id;
-    
-    if (!userId) {
-      throw createError('User not authenticated', 401);
-    }
-
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        username: true,
-        bio: true,
-        image: true,
-        isVerified: true,
-        emailVerified: true,
-        lastLoginAt: true,
-        createdAt: true,
-        artist: {
-          select: {
-            id: true,
-            name: true,
-            verified: true,
-            followers: true,
-            monthlyListeners: true
-          }
-        },
-        _count: {
-          select: {
-            tracks: true,
-            playlists: true,
-            followers: true,
-            following: true
-          }
-        }
-      }
-    });
-
-    if (!user) {
-      throw createError('User not found', 404);
-    }
-
-    logger.info('User profile retrieved', { userId });
-
-    res.status(200).json({
-      success: true,
-      data: { user }
-    });
-
-  } catch (error) {
-    logger.error('Error retrieving user profile:', error);
-
-    if (error.statusCode) {
-      res.status(error.statusCode).json({
-        success: false,
-        error: { message: error.message }
-      });
-      return;
-    }
-
-    res.status(500).json({
-      success: false,
-      error: { message: 'Internal server error' }
-    });
-  }
-};
-
-/**
- * Update user profile
- */
-export const updateUserProfile = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
-  try {
-    const userId = req.user?.id;
-    
-    if (!userId) {
-      throw createError('User not authenticated', 401);
-    }
-
-    const { name, username, bio } = req.body;
-
-    // Validation
-    const updateData: any = {};
-
-    if (name !== undefined) {
-      if (!name || name.trim().length < 2) {
-        throw createError('Name must be at least 2 characters long', 400);
-      }
-      updateData.name = sanitizeInput(name.trim());
-    }
-
-    if (username !== undefined) {
-      if (username && !validateUsername(username)) {
-        throw createError('Invalid username format', 400);
-      }
-      
-      if (username) {
-        // Get current user to check last username change
-        const currentUser = await prisma.user.findUnique({
-          where: { id: userId },
-          select: { username: true, lastUsernameChangeAt: true }
-        });
-
-        if (!currentUser) {
-          throw createError('User not found', 404);
-        }
-
-        // Check if username is being changed
-        if (currentUser.username !== username.toLowerCase()) {
-          // Check if user has changed username in the last 30 days
-          if (currentUser.lastUsernameChangeAt) {
-            const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-            if (currentUser.lastUsernameChangeAt > thirtyDaysAgo) {
-              const nextChangeDate = new Date(currentUser.lastUsernameChangeAt.getTime() + 30 * 24 * 60 * 60 * 1000);
-              throw createError(`Username can only be changed once every 30 days. Next change available on ${nextChangeDate.toDateString()}`, 400);
-            }
-          }
-
-          // Check if username is already taken
-          const existingUser = await prisma.user.findFirst({
-            where: {
-              username: username.toLowerCase(),
-              NOT: { id: userId }
-            }
-          });
-
-          if (existingUser) {
-            throw createError('Username already taken', 409);
-          }
-
-          updateData.username = username.toLowerCase();
-          updateData.lastUsernameChangeAt = new Date();
-        }
-      } else {
-        updateData.username = null;
-      }
-    }
-
-    if (bio !== undefined) {
-      if (bio && bio.length > 500) {
-        throw createError('Bio must be 500 characters or less', 400);
-      }
-      updateData.bio = bio ? sanitizeInput(bio.trim()) : null;
-    }
-
-    // Update user
-    const updatedUser = await prisma.user.update({
-      where: { id: userId },
-      data: updateData,
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        username: true,
-        bio: true,
-        image: true,
-        isVerified: true,
-        emailVerified: true,
-        updatedAt: true
-      }
-    });
-
-    logger.info('User profile updated', { userId, updatedFields: Object.keys(updateData) });
-
-    res.status(200).json({
-      success: true,
-      message: 'Profile updated successfully',
-      data: { user: updatedUser }
-    });
-
-  } catch (error) {
-    logger.error('Error updating user profile:', error);
-
-    if (error.code === 'P2002') {
-      res.status(409).json({
-        success: false,
-        error: { message: 'Username already exists' }
-      });
-      return;
-    }
-
-    if (error.statusCode) {
-      res.status(error.statusCode).json({
-        success: false,
-        error: { message: error.message }
-      });
-      return;
-    }
-
-    res.status(500).json({
-      success: false,
-      error: { message: 'Internal server error' }
-    });
-  }
-};
-
-/**
  * Get user preferences
  */
 export const getUserPreferences = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const userId = req.user?.id;
-    
+
     if (!userId) {
       throw createError('User not authenticated', 401);
     }
@@ -250,7 +49,7 @@ export const getUserPreferences = async (req: AuthenticatedRequest, res: Respons
 export const updateUserPreferences = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const userId = req.user?.id;
-    
+
     if (!userId) {
       throw createError('User not authenticated', 401);
     }
@@ -262,7 +61,7 @@ export const updateUserPreferences = async (req: AuthenticatedRequest, res: Resp
     }
 
     const updatedPreferences = await PreferencesService.updateUserPreferences(userId, preferences);
-    
+
     logger.info('User preferences updated', { userId });
 
     res.status(200).json({
@@ -295,7 +94,7 @@ export const updateUserPreferences = async (req: AuthenticatedRequest, res: Resp
 export const getUserStats = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const userId = req.user?.id;
-    
+
     if (!userId) {
       throw createError('User not authenticated', 401);
     }
@@ -389,78 +188,12 @@ export const getUserStats = async (req: AuthenticatedRequest, res: Response): Pr
 };
 
 /**
- * Delete user account
- */
-export const deleteUserAccount = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
-  try {
-    const userId = req.user?.id;
-    
-    if (!userId) {
-      throw createError('User not authenticated', 401);
-    }
-
-    const { confirmDelete } = req.body;
-
-    if (!confirmDelete) {
-      throw createError('Account deletion confirmation required', 400);
-    }
-
-    // Soft delete: we'll mark the user as inactive instead of hard delete
-    // This preserves data integrity for tracks, comments, etc.
-    await prisma.user.update({
-      where: { id: userId },
-      data: {
-        email: `deleted_${Date.now()}_${userId}@deleted.local`,
-        name: 'Deleted User',
-        username: null,
-        bio: null,
-        image: null,
-        isVerified: false,
-        emailVerified: false
-      }
-    });
-
-    // Also soft delete associated artist profile if exists
-    await prisma.artist.updateMany({
-      where: { userId },
-      data: {
-        isActive: false,
-        email: `deleted_${Date.now()}_${userId}@deleted.local`
-      }
-    });
-
-    logger.info('User account deleted', { userId });
-
-    res.status(200).json({
-      success: true,
-      message: 'Account deleted successfully'
-    });
-
-  } catch (error) {
-    logger.error('Error deleting user account:', error);
-
-    if (error.statusCode) {
-      res.status(error.statusCode).json({
-        success: false,
-        error: { message: error.message }
-      });
-      return;
-    }
-
-    res.status(500).json({
-      success: false,
-      error: { message: 'Internal server error' }
-    });
-  }
-};
-
-/**
  * Upload user avatar
  */
 export const uploadUserAvatar = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const userId = req.user?.id;
-    
+
     if (!userId) {
       throw createError('User not authenticated', 401);
     }
@@ -490,10 +223,10 @@ export const uploadUserAvatar = async (req: AuthenticatedRequest, res: Response)
         const existingPublicId = `avatars/${fileWithExtension.split('.')[0]}`;
         await deleteAvatar(existingPublicId);
       } catch (deleteError) {
-        logger.warn('Failed to delete existing avatar from Cloudinary', { 
-          userId, 
+        logger.warn('Failed to delete existing avatar from Cloudinary', {
+          userId,
           existingImage: currentUser.image,
-          error: deleteError 
+          error: deleteError
         });
       }
     }
@@ -512,16 +245,16 @@ export const uploadUserAvatar = async (req: AuthenticatedRequest, res: Response)
       }
     });
 
-    logger.info('User avatar uploaded successfully', { 
-      userId, 
+    logger.info('User avatar uploaded successfully', {
+      userId,
       imageUrl: secure_url,
-      publicId: public_id 
+      publicId: public_id
     });
 
     res.status(200).json({
       success: true,
       message: 'Avatar uploaded successfully',
-      data: { 
+      data: {
         user: updatedUser,
         upload: {
           url: secure_url,
@@ -554,7 +287,7 @@ export const uploadUserAvatar = async (req: AuthenticatedRequest, res: Response)
 export const removeUserAvatar = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const userId = req.user?.id;
-    
+
     if (!userId) {
       throw createError('User not authenticated', 401);
     }
@@ -578,7 +311,7 @@ export const removeUserAvatar = async (req: AuthenticatedRequest, res: Response)
       const urlParts = currentUser.image.split('/');
       const fileWithExtension = urlParts[urlParts.length - 1];
       const publicId = `avatars/${fileWithExtension.split('.')[0]}`;
-      
+
       const deleteSuccess = await deleteAvatar(publicId);
       if (!deleteSuccess) {
         logger.warn('Failed to delete avatar from Cloudinary', { userId, publicId });

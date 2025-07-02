@@ -4,8 +4,11 @@ import { requireAuth, optionalAuth } from '@/middleware/auth';
 import { asyncHandler } from '@/middleware/errorHandler';
 
 // Import auth controllers
-import { login, logout, refreshToken } from '@/controllers/auth/login';
+import { login, logout } from '@/controllers/auth/login';
 import { register } from '@/controllers/auth/register';
+import { getProfile, updateProfile, deleteAccount } from '@/controllers/auth/profile';
+import { changePassword, forgotPassword, resetPassword } from '@/controllers/auth/password';
+import { verifyEmail, resendVerification, checkEmailVerification } from '@/controllers/auth/email';
 
 const router: Router = Router();
 
@@ -15,29 +18,39 @@ router.use(authRateLimiter);
 // Public authentication routes
 router.post('/register', asyncHandler(register));
 router.post('/login', asyncHandler(login));
-router.post('/refresh', asyncHandler(refreshToken));
-
-// Protected authentication routes
 router.post('/logout', asyncHandler(logout));
 
-// Password reset routes (to be implemented)
-// router.post('/forgot-password', asyncHandler(forgotPassword));
-// router.post('/reset-password', asyncHandler(resetPassword));
+// Password management routes
+router.post('/forgot-password', asyncHandler(forgotPassword));
+router.post('/reset-password', asyncHandler(resetPassword));
+router.post('/change-password', requireAuth, asyncHandler(changePassword));
 
-// Email verification routes (to be implemented)
-// router.post('/verify-email', asyncHandler(verifyEmail));
-// router.post('/resend-verification', asyncHandler(resendVerification));
+// Email verification routes
+router.post('/verify-email', asyncHandler(verifyEmail));
+router.post('/resend-verification', requireAuth, asyncHandler(resendVerification));
+router.get('/email-verification-status', requireAuth, asyncHandler(checkEmailVerification));
 
-// OAuth routes (to be implemented with Better Auth)
+// Profile management routes
+router.get('/me', requireAuth, asyncHandler(getProfile));
+router.patch('/profile', requireAuth, asyncHandler(updateProfile));
+router.delete('/account', requireAuth, asyncHandler(deleteAccount));
+
+// OAuth routes (to be implemented in future)
 // router.get('/google', googleAuth);
 // router.get('/google/callback', googleAuthCallback);
+// router.get('/apple', appleAuth);
+// router.get('/apple/callback', appleAuthCallback);
 
-// Auth status check
-router.get('/me', (req: Request, res: Response) => {
+// Auth status check (public endpoint)
+router.get('/status', optionalAuth, (req: Request, res: Response) => {
+  const user = (req as any).user;
   res.json({
     success: true,
-    message: 'Authenticated',
-    data: { user: (req as any).user }
+    message: user ? 'Authenticated' : 'Not authenticated',
+    data: {
+      authenticated: !!user,
+      user: user || null
+    }
   });
 });
 
@@ -46,7 +59,27 @@ router.get('/health', (_req: Request, res: Response) => {
   res.json({
     success: true,
     message: 'Auth routes are operational',
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    endpoints: {
+      public: [
+        'POST /register',
+        'POST /login',
+        'POST /logout',
+        'POST /forgot-password',
+        'POST /reset-password',
+        'POST /verify-email',
+        'GET /status',
+        'GET /health'
+      ],
+      protected: [
+        'GET /me',
+        'PATCH /profile',
+        'DELETE /account',
+        'POST /change-password',
+        'POST /resend-verification',
+        'GET /email-verification-status'
+      ]
+    }
   });
 });
 

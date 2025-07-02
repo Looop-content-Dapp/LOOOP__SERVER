@@ -1,29 +1,19 @@
 import { Request, Response } from 'express';
-import bcrypt from 'bcryptjs';
 import { prisma } from '@/config/database';
 import { logger } from '@/utils/logger';
 import { createError } from '@/middleware/errorHandler';
 import { generateReferralCode } from '@/utils/referral';
 import { validateEmail, validatePassword } from '@/utils/validation';
 import { starknetService } from '@/services/starknet.service';
-import { auth } from '@/config/auth';
-import { fromNodeHeaders } from 'better-auth/node';
-
-interface RegisterRequest {
-  name: string;
-  email: string;
-  password: string;
-  username?: string;
-  referralCode?: string;
-  bio: string;
-}
+import { AuthService } from '@/services/auth.service';
+import { RegisterRequest, AuthResponse } from '@/types/auth.types';
 
 export const register = async (req: Request, res: Response): Promise<void> => {
   try {
     const { name, email, password, username, referralCode, bio }: RegisterRequest = req.body;
 
     // Validation
-    if (!name || !email || !password  || !username) {
+    if (!name || !email || !password) {
       throw createError('Name, email, and password are required', 400);
     }
 
@@ -57,30 +47,8 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       }
     }
 
-   // Hash password
-    const saltRounds = 12;
-    const hashedPassword = await bcrypt.hash(password, saltRounds);
-
-    const session = await auth.api.signUpEmail({
-    headers: fromNodeHeaders(req.headers),
-    method: "POST",
-     body: {
-      name: name,
-      email: email,
-      password: password,
-    },
-    })
-
-    await prisma.user.update({
-      where: {
-        id: session.user.id
-      },
-      data: {
-        id: session.user.id,
-        username: username?.toLowerCase(),
-        bio: bio
-      }
-    })
+    // Hash password
+    const hashedPassword = await AuthService.hashPassword(password);
 
     // Handle referral if provided
     let referrer = null;
@@ -98,34 +66,84 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       }
     }
 
-    const walletInfo = await starknetService.createUserWallet(email);
-    console.log("Wallet info:", walletInfo);
-
-    // Create user
-    await prisma.wallet.create({
+    // Create user with transaction
+    const user = await prisma.$transaction(async (tx) => {
+      // Create user
+      const newUser = await tx.user.create({
         data: {
-            email: email,
-            address: walletInfo.address,
-            publickey: walletInfo.publickey,
-            encryptedPrivateKey: walletInfo.privateKey,
-            userId: session.user.id
+          name,
+          email: email.toLowerCase(),
+          password: hashedPassword,
+          username: username?.toLowerCase(),
+          bio: bio || null,
+          emailVerified: false
         }
-    })
+      });
+
+      // Create wallet
+      const walletInfo = await starknetService.createUserWallet(email);
+      await tx.wallet.create({
+        data: {
+          email: email.toLowerCase(),
+          address: walletInfo.address,
+          publickey: walletInfo.publickey,
+          encryptedPrivateKey: walletInfo.privateKey,
+          userId: newUser.id
+        }
+      });
+
+      // Handle referral completion
+      if (referrer) {
+        await tx.referral.update({
+          where: { id: referrer.id },
+          data: {
+            referredId: newUser.id,
+            status: 'completed',
+            completedAt: new Date()
+          }
+        });
+      }
+
+      return { user: newUser, walletInfo };
+    });
+
+    // Generate JWT token
+    const token = AuthService.generateToken({
+      userId: user.user.id,
+      email: user.user.email,
+      name: user.user.name,
+      username: user.user.username || undefined,
+      isVerified: user.user.isVerified,
+      emailVerified: user.user.emailVerified
+    });
 
     logger.info('User registered successfully', {
-      userId: session.user.id,
-      email: session.user.email,
+      userId: user.user.id,
+      email: user.user.email,
       hasReferrer: !!referrer
     });
 
-    res.status(201).json({
+    const response: AuthResponse = {
       success: true,
       message: 'User registered successfully. Please check your email for verification.',
       data: {
-        user: session.user,
-      },
-      walletInfo
-    });
+        user: {
+          id: user.user.id,
+          email: user.user.email,
+          name: user.user.name,
+          username: user.user.username,
+          bio: user.user.bio,
+          image: user.user.image,
+          isVerified: user.user.isVerified,
+          emailVerified: user.user.emailVerified
+        },
+        token,
+        tokenType: 'Bearer',
+        expiresIn: 30 * 24 * 60 * 60 // 30 days in seconds
+      }
+    };
+
+    res.status(201).json(response);
 
   } catch (error) {
     logger.error('Registration error:', error);
