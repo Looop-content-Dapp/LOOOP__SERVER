@@ -1,5 +1,7 @@
-// Re-export all wallet types for easy importing
+// Re-export all types for easy importing
 export * from './wallet.types';
+export * from './playlist.types';
+export * from './streaming.types';
 
 // Common type definitions that can be used across the application
 import { Prisma } from '@prisma/client';

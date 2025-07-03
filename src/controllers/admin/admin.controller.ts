@@ -340,3 +340,41 @@ export const getPendingAdminRegistrations = async (req: AdminRequest, res: Respo
     });
   }
 };
+
+/**
+ * Check if admin bootstrap is needed
+ */
+export const checkBootstrapStatus = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const superAdminCount = await prisma.user.count({
+      where: {
+        role: 'SUPER_ADMIN',
+        isAdmin: true
+      }
+    });
+
+    const isBootstrapNeeded = superAdminCount === 0;
+
+    res.json({
+      success: true,
+      data: {
+        isBootstrapNeeded,
+        superAdminCount,
+        message: isBootstrapNeeded 
+          ? 'No SUPER_ADMIN exists. Bootstrap required.' 
+          : 'SUPER_ADMIN exists. System is ready.',
+        recommendation: isBootstrapNeeded 
+          ? 'Run bootstrap script or register first SUPER_ADMIN through /admin/register endpoint'
+          : 'System is properly configured'
+      }
+    });
+
+  } catch (error) {
+    logger.error('Error checking bootstrap status:', error);
+
+    res.status(500).json({
+      success: false,
+      error: { message: 'Internal server error' }
+    });
+  }
+};

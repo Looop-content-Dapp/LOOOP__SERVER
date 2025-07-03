@@ -37,7 +37,7 @@ import {
   WalletDeploymentResult,
 } from "../types/wallet.types.js";
 import { createError } from "@/middleware/errorHandler";
-import { deployWallet } from "cavos-service-sdk";
+import { deployWallet, executeAction } from "cavos-service-sdk";
 
 dotenv.config();
 
@@ -497,15 +497,6 @@ export default class StarknetService {
 }
 
   /**
-   * Deploy a Starknet wallet and fund it
-   * @param email - The user's email
-   * @param funderAddress - Address to fund the wallet
-   * @param funderPrivateKey - Private key of the funder
-   * @param amount - Amount to fund in wei
-   * @returns The deployment and funding result
-   */
-
-  /**
    * Fund a Starknet wallet with ETH
    * @param recipientAddress - The wallet address to fund
    * @param funderAddress - The funder's address
@@ -531,6 +522,14 @@ export default class StarknetService {
         "0x04718f5a0Fc34cC1AF16A1cdee98fFB20C31f5cD61D6Ab07201858f4287c938D";
       const ethContract = this.getContract(ethContractAddress, erc20);
       ethContract.connect(funderAccount);
+
+      const resp = await executeAction(
+        "sepolia",
+         [],
+          "",
+         "",
+         process.env.CAVOS_API_SECRET
+    )
 
       const transferCall = ethContract.populate("transfer", [recipientAddress, amount]);
       const res = await ethContract.transfer(transferCall.calldata);
@@ -558,16 +557,23 @@ export default class StarknetService {
       }
 
       const recipientAddress = user.address;
-      const usdcContract = this.getContract(this.usdcAddress, usdcAbi);
-      usdcContract.connect(this.funderAccount);
+      const calls = [{
+  contractAddress: this.usdcAddress,
+  entrypoint: 'mint',
+  calldata: [
+    recipientAddress,
+    100000000
+  ]
+}];
 
-      const call = await usdcContract.populate("mint", [recipientAddress, 100000000]);
-      const { transaction_hash: transferTxHash } = await usdcContract.mint(call.calldata);
-
-      console.log("USDC Mint Transaction Hash:", transferTxHash);
-      await this.provider.waitForTransaction(transferTxHash);
-      console.log("Test USDC minted successfully");
-      return { success: true, transactionHash: transferTxHash };
+  const res = await executeAction(
+        "sepolia",
+         calls,
+        this.usdcAddress,
+         user.privateKey,
+         process.env.CAVOS_API_SECRET
+    )
+      return { success: true, transactionHash: res.transaction_hash };
     } catch (error: any) {
       console.error("Error minting test USDC:", error);
       throw error;
@@ -698,10 +704,9 @@ export default class StarknetService {
     }
   }
 
-  async getStarkNetUSDCBalance(starknetAddress: string, usdcAddress: string | null = null): Promise<USDCBalance> {
+  async getStarkNetUSDCBalance(starknetAddress: string): Promise<USDCBalance> {
     try {
       const USDC_ADDRESS =
-        usdcAddress ||
         "0x0475e85c9f471885c1624c297862df9aaffa82ad55c7d1fde1ac892232445e06";
       const contract = new Contract(usdcAbi, USDC_ADDRESS, this.provider);
       const response = await contract.balance_of(starknetAddress);
@@ -756,40 +761,35 @@ export default class StarknetService {
   ): Promise<TransactionResult> {
     try {
       const senderAccount = await this.getUserWalletInfo(senderEmail);
-    //   if (!senderAccount.isDeployed) {
-    //     throw new Error("Sender's wallet is not deployed");
-    //   }
-
-      const account0 = new Account(
-        this.provider,
-        senderAccount.address,
-        senderAccount.privateKey,
-        undefined,
-        constants.TRANSACTION_VERSION.V3
-      );
-
-      const contract = this.getContract(this.usdcAddress, usdcAbi);
-      contract.connect(account0);
 
       const senderBalance = await this.getStarkNetUSDCBalance(senderAccount.address);
       if (senderBalance.balanceFloat * 1e6 < amount) {
         throw new Error("Insufficient USDC balance");
       }
 
-      const transferCall = contract.populate("transfer", [recipientAddress, uint256.bnToUint256(amount)]);
-      const res = await contract.transfer(transferCall.calldata);
-      console.log("USDC transfer transaction hash:", res);
+      const calls = [{
+  contractAddress: this.usdcAddress,
+  entrypoint: 'transfer',
+  calldata: [
+    recipientAddress,
+    amount,
+  ]
+}];
 
-      const receipt: any = await this.provider.waitForTransaction(res.transaction_hash);
-      console.log("USDC transfer transaction receipt:", receipt);
+      const res = await executeAction(
+        "sepolia",
+        calls,
+        senderAccount.address,
+        senderAccount.privateKey,
+        process.env.CAVOS_API_SECRET
+      );
+      console.log("USDC transfer transaction hash:", res);
 
       const details = await this.getTransactionDetails(res.transaction_hash);
 
       return {
         transactionHash: res.transaction_hash,
-        receipt,
         details,
-        status: receipt.execution_status,
         amount,
         from: senderAccount.address,
         to: recipientAddress,

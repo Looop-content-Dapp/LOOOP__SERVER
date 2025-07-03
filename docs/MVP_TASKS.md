@@ -9,7 +9,7 @@ This MVP focuses on core functionality for a music streaming platform with basic
 ### Phase 1: Foundation & Authentication (Week 1-2)
 
 #### High Priority
-- [X ] **Environment Setup & Dependencies**
+<!-- - [X ] **Environment Setup & Dependencies**
   - [ X] Install all dependencies: `pnpm install`
   - [X ] Set up `.env` file with all required variables
   - [X ] Set up PostgreSQL database (local or Docker)
@@ -31,14 +31,14 @@ This MVP focuses on core functionality for a music streaming platform with basic
     - [ ] Refresh token mechanism
   - [ ] Google OAuth integration (basic)
   - [ ] Password validation and security rules
-  - [ ] Rate limiting for auth endpoints (already configured)
+  - [ ] Rate limiting for auth endpoints (already configured) -->
 
 #### Medium Priority
-- [ ] **User Management**
+<!-- - [ ] **User Management**
   - [ ] User profile controllers (`src/controllers/user/`)
   - [ ] Profile update functionality
   - [ ] Avatar upload with Cloudinary
-  - [ ] Basic user preferences
+  - [ ] Basic user preferences -->
 
 ### Phase 2: Core Music Features (Week 3-4)
 
@@ -54,12 +54,12 @@ This MVP focuses on core functionality for a music streaming platform with basic
     - [ ] Delete track
   - [ ] Audio file validation and processing
 
-- [ ] **Artist Profile System**
+<!-- - [ ] **Artist Profile System**
   - [ ] Artist claiming process
   - [ ] Artist verification system (manual approval)
   - [ ] Artist profile controllers (`src/controllers/artist/`)
   - [ ] Artist-track relationships
-  - [ ] Basic artist analytics (play counts, etc.)
+  - [ ] Basic artist analytics (play counts, etc.) -->
 
 #### Medium Priority
 - [ ] **Basic Playlist Functionality**
@@ -86,7 +86,7 @@ This MVP focuses on core functionality for a music streaming platform with basic
 - [ ] **Community System (Basic)**
   - [ ] Community creation by artists
   - [ ] Community membership management
-  - [ ] Basic post creation in communities
+  - [ ] Basic post creation in communities by artist who owns community
   - [ ] Community discovery
 
 #### Medium Priority

@@ -16,7 +16,8 @@
         "db:push": "prisma db push",
         "db:migrate": "prisma migrate dev",
         "db:studio": "prisma studio",
-        "db:format": "prisma format"
+        "db:format": "prisma format",
+        "admin:bootstrap": "ts-node -r tsconfig-paths/register src/scripts/bootstrap-admin.ts"
     },
     "dependencies": {
         "@prisma/client": "^6.10.1",
@@ -42,6 +43,7 @@
         "nodemailer-express-handlebars": "^7.0.0",
         "nodemailer-smtp-transport": "^2.7.4",
         "socket.io": "^4.8.1",
+        "spotify-web-api-node": "^5.0.2",
         "starknet": "^7.6.2",
         "winston": "^3.17.0"
     },

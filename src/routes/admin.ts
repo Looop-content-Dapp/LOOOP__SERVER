@@ -29,10 +29,16 @@ import {
   createAdminPlaylist,
   getAdminProfile,
   banUser,
-  getPendingAdminRegistrations
+  getPendingAdminRegistrations,
+  checkBootstrapStatus
 } from '@/controllers/admin/admin.controller';
+import { approveArtistClaim, getPendingClaims, rejectArtistClaim } from '@/controllers/artist/claims';
+import { validateClaimId, validateClaimRejection } from '@/middleware/artistValidation';
 
 const router: Router = Router();
+
+// Bootstrap status check (public endpoint)
+router.get('/bootstrap/status', asyncHandler(checkBootstrapStatus));
 
 // Public admin registration (with domain validation)
 router.post('/register',
@@ -108,6 +114,17 @@ router.put('/admins/:userId/permissions',
   asyncHandler(updateAdminPermissions)
 );
 
+router.get('/claims/pending', requireAuth, asyncHandler(getPendingClaims));
+router.put('/claims/:claimId/approve', requireAuth, validateClaimId, asyncHandler(handleAdminValidationErrors), asyncHandler(approveArtistClaim));
+router.put('/claims/:claimId/reject',
+  requireAuth,
+  validateClaimId,
+  validateClaimRejection,
+  asyncHandler(handleAdminValidationErrors),
+  asyncHandler(rejectArtistClaim)
+);
+
+
 // Health check
 router.get('/health', (_req: Request, res: Response) => {
   res.json({
@@ -130,7 +147,7 @@ router.get('/health', (_req: Request, res: Response) => {
       ADMIN: {
         permissions: [
           'canApproveArtistClaims',
-          'canManageUsers', 
+          'canManageUsers',
           'canCreatePlaylists',
           'canModerateContent',
           'canViewAnalytics',
@@ -142,7 +159,7 @@ router.get('/health', (_req: Request, res: Response) => {
         permissions: [
           'canApproveArtistClaims',
           'canManageUsers',
-          'canCreatePlaylists', 
+          'canCreatePlaylists',
           'canModerateContent',
           'canManageAdmins',
           'canViewAnalytics',

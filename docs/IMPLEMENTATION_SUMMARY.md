@@ -1,5 +1,24 @@
 # Step 3: User Avatar Endpoints & Controller Enhancements - Implementation Summary
 
+implement the below endpoints task
+
+ Music feed
+- Music home Feed with new releases, artist you follow, admin playlist,  hottest on the block playlist
+- discover section with top songs based on loation, top 10 ablbums, top songs worldwide
+- search functionality to search music, artist, albums, playlist
+
+Social Features
+  - Follow/unfollow an artist
+  - Like/unlike tracks
+  - Basic commenting system on community post
+  - User feed (recent community post from Joined community)
+
+  Community System (Basic)
+  - Community creation by verified artists only
+  - Community membership management
+  - Basic post creation in communities by artist who owns community
+  - Community discovery
+
 ## ✅ Completed Tasks
 
 ### 1. Avatar Upload & Delete Endpoints
@@ -7,7 +26,7 @@
 - **DELETE /api/v1/user/avatar** - Remove user avatar
 
 ### 2. Controller Flow Implementation
-✅ **Image Validation**: 
+✅ **Image Validation**:
 - File type validation (JPEG, PNG, WebP)
 - File size limit (5MB)
 - Image transformation (400x400, face-cropped)

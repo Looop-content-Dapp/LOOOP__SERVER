@@ -47,10 +47,28 @@ export class AdminService {
       // Determine permissions based on admin level
       const permissions = requestedPermissions || DEFAULT_ADMIN_PERMISSIONS[adminLevel];
 
-      // Determine if automatic approval or requires approval
-      const isAutoApprove = adminLevel === 'MODERATOR'; // Only moderators get auto-approval
+      // Check if this is the first admin (bootstrap scenario)
+      const existingSuperAdmins = await prisma.user.count({
+        where: {
+          role: 'SUPER_ADMIN',
+          isAdmin: true
+        }
+      });
+
+      // Auto-approve if:
+      // 1. It's a MODERATOR registration, OR
+      // 2. No SUPER_ADMIN exists yet (bootstrap scenario)
+      const isBootstrapScenario = existingSuperAdmins === 0;
+      const isAutoApprove = adminLevel === 'MODERATOR' || (isBootstrapScenario && adminLevel === 'SUPER_ADMIN');
       const role: UserRole = adminLevel === 'SUPER_ADMIN' ? 'SUPER_ADMIN' :
                              adminLevel === 'ADMIN' ? 'ADMIN' : 'MODERATOR';
+
+      if (isBootstrapScenario && adminLevel === 'SUPER_ADMIN') {
+        logger.info('Bootstrap scenario detected - auto-approving first SUPER_ADMIN', {
+          email: email.toLowerCase(),
+          name
+        });
+      }
 
       // Create admin user
       const adminUser = await prisma.user.create({

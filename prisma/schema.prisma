@@ -39,7 +39,7 @@ model User {
   lastUsernameChangeAt DateTime?
   DateOfBirth   DateTime?
   country       String?
-  
+
   // Admin roles and permissions
   role          UserRole @default(USER)
   permissions   String[] @default([])
@@ -47,7 +47,8 @@ model User {
   adminLevel    AdminLevel? // Super admin, admin, moderator
   adminApprovedAt DateTime?
   adminApprovedBy String?
-  
+
+
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -112,7 +113,7 @@ model Artist {
   roles            String[]
   labels           String[]
   isActive         Boolean   @default(true)
-  genres           String[]
+  genres           Genre[]   @relation("ArtistGenres")
   wallet           Json?
   claimedAt        DateTime?
   createdAt        DateTime  @default(now())
@@ -513,19 +514,19 @@ model ArtistClaim {
   id          String   @id @default(cuid())
   userId      String
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+
   // Artist information
   artistId    String?
   artist      Artist?  @relation(fields: [artistId], references: [id], onDelete: Cascade)
   artistName  String   // For new artist claims
-  
+
   // Claimant information
   role        String   // artist, manager, label_rep, band_member, etc.
   fullName    String
   email       String
   phone       String?
   companyName String?
-  
+
   // Verification data
   officialEmail     String?
   websiteUrl        String?
@@ -533,14 +534,14 @@ model ArtistClaim {
   distributorInfo   Json?     // DistroKid, TuneCore, AWAL integration data
   connectionDetails String?   // How they're connected to the artist
   evidenceUrls      String[]  // Multiple evidence URLs
-  
+
   // Status and processing
   status            String   @default("pending") // pending, under_review, approved, rejected, info_required
   submissionType    String   @default("manual") // manual, distributor_verified
   reviewNotes       String?
   rejectionReason   String?
   adminUserId       String?
-  
+
   // Timestamps
   submittedAt       DateTime @default(now())
   reviewedAt        DateTime?
@@ -568,4 +569,30 @@ model ArtistAnalyticsDaily {
   @@index([artistId])
   @@index([date])
   @@map("artist_analytics_daily")
+}
+
+model Genre {
+  id        String @id @default(cuid())
+  name      String
+  artists   ArtistGenre[] // Add this line
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([name])
+  @@index([id])
+  @@index([name])
+  @@map("genres")
+}
+
+model ArtistGenre {
+  id        String @id @default(cuid())
+  artistId  String
+  artist    Artist @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  genreId   String
+  genre     Genre  @relation(fields: [genreId], references: [id], onDelete: Cascade)
+
+  @@unique([artistId, genreId])
+  @@index([artistId])
+  @@index([genreId])
+  @@map("artist_genres")
 }

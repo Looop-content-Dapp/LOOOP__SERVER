@@ -1,4 +1,5 @@
 import { Prisma } from '@prisma/client';
+import { GetBlockResponse, GetTransactionResponse, TransactionReceipt } from 'starknet';
 
 /**
  * Wallet information interface compatible with Prisma Json type
@@ -112,15 +113,25 @@ export interface USDCBalance {
   response?: unknown;
 }
 
+export interface  TransactionDetails {
+    transaction: GetTransactionResponse;
+    receipt: TransactionReceipt;
+    blockInfo: GetBlockResponse | null;
+    status: string;
+    executionStatus: string;
+    finalityStatus: string;
+    timestamp: number | null;
+    events: any[];
+}
+
 /**
  * Transaction result interface
  */
 export interface TransactionResult {
   transactionHash: string;
-  receipt: unknown;
   eventData?: unknown;
   mintEvent?: unknown;
-  details?: unknown;
+  details?: TransactionDetails;
   status?: string;
   amount?: number;
   from?: string;

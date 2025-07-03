@@ -1,5 +1,9 @@
 version: '3.8'
 
+# IMPORTANT: This docker-compose.yml uses environment variables for sensitive data.
+# Copy .env.example to .env and configure your actual values there.
+# Never commit actual secrets to version control.
+
 services:
   # PostgreSQL Database
   postgres:
@@ -10,11 +14,11 @@ services:
       POSTGRES_PASSWORD: password
       POSTGRES_DB: looop_db
     ports:
-      - "5432:5432"
+      - '5432:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
       interval: 30s
       timeout: 10s
       retries: 5
@@ -33,11 +37,72 @@ services:
     build: .
     container_name: looop_app
     ports:
-      - "5000:5000"
-      - "5001:5001"  # WebSocket port
+      - '5000:5000'
+      - '5001:5001' # WebSocket port
     environment:
       - NODE_ENV=development
       - DATABASE_URL=postgresql://postgres:password@postgres:5432/looop_db
+      - PORT=${PORT:-3001}
+      - API_VERSION=v1
+
+      # Database configuration
+      - DATABASE_URL=${DATABASE_URL}
+
+      # Admin bootstrap configuration
+      - BOOTSTRAP_ADMIN_NAME=${BOOTSTRAP_ADMIN_NAME}
+      - BOOTSTRAP_ADMIN_EMAIL=${BOOTSTRAP_ADMIN_EMAIL}
+      - BOOTSTRAP_ADMIN_PASSWORD=${BOOTSTRAP_ADMIN_PASSWORD}
+
+      # External service API keys
+      - CAVOS_API_SECRET=${CAVOS_API_SECRET}
+      - CAVOS_HASH_KEY=${CAVOS_HASH_KEY}
+
+      # Authentication configuration
+      - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET}
+      - BETTER_AUTH_URL=${BETTER_AUTH_URL}
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-30d}
+
+      # OAuth configuration
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - APPLE_CLIENT_ID=${APPLE_CLIENT_ID}
+      - APPLE_PRIVATE_KEY=${APPLE_PRIVATE_KEY}
+
+      # Cloud storage configuration
+      - CLOUDINARY_CLOUD_NAME=${CLOUDINARY_CLOUD_NAME}
+      - CLOUDINARY_API_KEY=${CLOUDINARY_API_KEY}
+      - CLOUDINARY_API_SECRET=${CLOUDINARY_API_SECRET}
+
+      # Email configuration
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASS=${SMTP_PASS}
+
+      # Blockchain configuration
+      - STARKNET_PROVIDER_URL=${STARKNET_PROVIDER_URL}
+      - STARKNET_PRIVATE_KEY=${STARKNET_PRIVATE_KEY}
+      - STARKNET_ACCOUNT_ADDRESS=${STARKNET_ACCOUNT_ADDRESS}
+
+      # Rate limiting
+      - RATE_LIMIT_WINDOW_MS=${RATE_LIMIT_WINDOW_MS:-900000}
+      - RATE_LIMIT_MAX_REQUESTS=${RATE_LIMIT_MAX_REQUESTS:-100}
+
+      # CORS configuration
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
+
+      # File upload configuration
+      - MAX_FILE_SIZE=${MAX_FILE_SIZE:-10485760}
+      - ALLOWED_FILE_TYPES=${ALLOWED_FILE_TYPES}
+
+      # Analytics configuration
+      - ANALYTICS_BATCH_SIZE=${ANALYTICS_BATCH_SIZE:-100}
+      - ANALYTICS_FLUSH_INTERVAL=${ANALYTICS_FLUSH_INTERVAL:-60000}
+
+      # WebSocket configuration
+      - WEBSOCKET_PORT=${WEBSOCKET_PORT:-5001}
+
     depends_on:
       postgres:
         condition: service_healthy

@@ -98,16 +98,6 @@ router.post('/claim',
   asyncHandler(claimArtistProfile)
 );
 
-// Legacy Admin routes (TODO: Add admin middleware)
-router.get('/admin/claims/pending', asyncHandler(getPendingClaims));
-router.put('/admin/claims/:claimId/approve', validateClaimId, asyncHandler(handleValidationErrors), asyncHandler(approveArtistClaim));
-router.put('/admin/claims/:claimId/reject',
-  validateClaimId,
-  validateClaimRejection,
-  asyncHandler(handleValidationErrors),
-  asyncHandler(rejectArtistClaim)
-);
-
 // Health check
 router.get('/health', (_req: Request, res: Response) => {
   res.json({

@@ -614,26 +614,88 @@ export class ArtistService {
         throw createError('Claim is not pending', 400);
       }
 
-      // Update claim status and link user to artist
+      let artistId: string;
+      let isNewArtist = false;
+
+      // Handle both existing and new artist claims
       await prisma.$transaction(async (tx) => {
-        // Update claim status
+        // Update claim status first
         await tx.artistClaim.update({
           where: { id: claimId },
-          data: { status: 'approved' }
-        });
-
-        // Update artist with user association
-        await tx.artist.update({
-          where: { id: claim.artistId },
           data: {
-            userId: claim.userId,
-            claimedAt: new Date(),
-            verified: true,
-            verifiedAt: new Date()
+            status: 'approved',
+            reviewedAt: new Date(),
+            approvedAt: new Date()
           }
         });
 
-        // Update user's artist relation
+        if (claim.artistId) {
+          // Case 1: Claiming existing artist profile
+          artistId = claim.artistId;
+          
+          // Update existing artist with user association
+          await tx.artist.update({
+            where: { id: claim.artistId },
+            data: {
+              userId: claim.userId,
+              claimedAt: new Date(),
+              verified: true,
+              verifiedAt: new Date()
+            }
+          });
+
+          logger.info('Existing artist profile claimed', {
+            claimId,
+            artistId: claim.artistId,
+            userId: claim.userId
+          });
+        } else {
+          // Case 2: Creating new artist profile
+          isNewArtist = true;
+          
+          // Create new artist profile
+          const newArtist = await tx.artist.create({
+            data: {
+              userId: claim.userId,
+              name: claim.artistName,
+              email: claim.email,
+              profileImage: null,
+              biography: null,
+              country: null,
+              websiteurl: claim.websiteUrl,
+              monthlyListeners: 0,
+              followers: 0,
+              verified: true,
+              verifiedAt: new Date(),
+              socialLinks: claim.socialLinks,
+              popularity: 0,
+              roles: [claim.role],
+              labels: [],
+              genres: [],
+              claimedAt: new Date(),
+              isActive: true
+            }
+          });
+
+          artistId = newArtist.id;
+
+          // Update claim with the new artist ID
+          await tx.artistClaim.update({
+            where: { id: claimId },
+            data: {
+              artistId: newArtist.id
+            }
+          });
+
+          logger.info('New artist profile created from claim', {
+            claimId,
+            artistId: newArtist.id,
+            artistName: claim.artistName,
+            userId: claim.userId
+          });
+        }
+
+        // Update user's verification status
         await tx.user.update({
           where: { id: claim.userId },
           data: {
@@ -642,15 +704,18 @@ export class ArtistService {
         });
       });
 
-      const updatedArtist = await this.getArtistProfile(claim.artistId);
+      // Get the artist profile (either updated existing or newly created)
+      const approvedArtist = await this.getArtistProfile(artistId);
 
-      logger.info('Artist claim approved', {
+      logger.info('Artist claim approved successfully', {
         claimId,
         userId: claim.userId,
-        artistId: claim.artistId
+        artistId,
+        isNewArtist,
+        artistName: claim.artistName
       });
 
-      return updatedArtist;
+      return approvedArtist;
     } catch (error) {
       logger.error('Error approving artist claim:', error);
       if (error.statusCode) {
