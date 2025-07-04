@@ -43,8 +43,21 @@ export class MusicFeedController {
             ...(genres?.length && { genre: { hasSome: genres as string[] } })
           },
           include: {
-            artist: true,
-            album: true,
+            artist: {
+              select: {
+                id: true,
+                name: true,
+                verified: true,
+                profileImage: true
+              }
+            },
+            album: {
+              select: {
+                id: true,
+                title: true,
+                artworkUrl: true
+              }
+            },
             _count: {
               select: { likes: true }
             }
@@ -68,13 +81,13 @@ export class MusicFeedController {
               playCount: track.playCount,
               likeCount: track._count.likes,
               artist: {
-                id: track.artist.id,
+                id: track.artistId,
                 name: track.artist.name,
                 verified: track.artist.verified,
                 profileImage: track.artist.profileImage
               },
               album: track.album ? {
-                id: track.album.id,
+                id: track.albumId,
                 title: track.album.title,
                 artworkUrl: track.album.artworkUrl
               } : undefined,
@@ -104,7 +117,21 @@ export class MusicFeedController {
                         }
                       },
                       include: {
-                        album: true,
+                        artist: {
+                          select: {
+                            id: true,
+                            name: true,
+                            verified: true,
+                            profileImage: true
+                          }
+                        },
+                        album: {
+                          select: {
+                            id: true,
+                            title: true,
+                            artworkUrl: true
+                          }
+                        },
                         _count: {
                           select: { likes: true }
                         }
@@ -167,13 +194,32 @@ export class MusicFeedController {
             }
           },
           include: {
-            user: true,
+            user: {
+              select: {
+                id: true,
+                name: true,
+                isAdmin: true
+              }
+            },
             tracks: {
               include: {
                 track: {
                   include: {
-                    artist: true,
-                    album: true,
+                    artist: {
+                      select: {
+                        id: true,
+                        name: true,
+                        verified: true,
+                        profileImage: true
+                      }
+                    },
+                    album: {
+                      select: {
+                        id: true,
+                        title: true,
+                        artworkUrl: true
+                      }
+                    },
                     _count: {
                       select: { likes: true }
                     }
@@ -250,8 +296,21 @@ export class MusicFeedController {
             }
           },
           include: {
-            artist: true,
-            album: true,
+            artist: {
+              select: {
+                id: true,
+                name: true,
+                verified: true,
+                profileImage: true
+              }
+            },
+            album: {
+              select: {
+                id: true,
+                title: true,
+                artworkUrl: true
+              }
+            },
             _count: {
               select: { likes: true }
             }
@@ -635,10 +694,10 @@ export class MusicFeedController {
             OR: [
               { title: { contains: query as string, mode: 'insensitive' } },
               { artist: { name: { contains: query as string, mode: 'insensitive' } } },
-              { genre: { hasSome: [query as string] } },
+              { genre: { has: query } },
               { tags: { hasSome: [query as string] } }
             ],
-            ...(genre && { genre: { hasSome: [genre] } })
+            ...(genre && { genre: { has: genre } })
           },
           include: {
             artist: true,
@@ -661,7 +720,7 @@ export class MusicFeedController {
               { genre: { hasSome: [query as string] } },
               { tags: { hasSome: [query as string] } }
             ],
-            ...(genre && { genre: { hasSome: [genre] } })
+            ...(genre && { genre: { has: genre } })
           }
         });
 
@@ -673,7 +732,7 @@ export class MusicFeedController {
           playCount: track.playCount,
           likeCount: track._count.likes,
           artist: {
-            id: track.artist.id,
+            id: track.artistId,
             name: track.artist.name,
             verified: track.artist.verified,
             profileImage: track.artist.profileImage
@@ -696,7 +755,7 @@ export class MusicFeedController {
           where: {
             OR: [
               { name: { contains: query as string, mode: 'insensitive' } },
-              { genres: { hasSome: [query as string] } }
+              { genres: { some: { genre: { name: { contains: query as string, mode: 'insensitive' } } } } }
             ]
           },
           include: {
@@ -715,7 +774,7 @@ export class MusicFeedController {
           where: {
             OR: [
               { name: { contains: query as string, mode: 'insensitive' } },
-              { genres: { hasSome: [query as string] } }
+              { genres: { some: { genre: { name: { contains: query as string, mode: 'insensitive' } } } } }
             ]
           }
         });

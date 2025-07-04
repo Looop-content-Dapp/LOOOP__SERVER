@@ -49,6 +49,13 @@ export interface PasswordResetConfirmRequest {
   newPassword: string;
 }
 
+export interface JWTPayload {
+  userId: string;
+  email: string;
+  iat?: number;
+  exp?: number;
+}
+
 export interface EmailVerificationRequest {
   token: string;
 }

@@ -13,7 +13,7 @@ import session from 'express-session'
 import { errorHandler } from '@/middleware/errorHandler';
 import { rateLimiter } from '@/middleware/rateLimiter';
 import { logger } from '@/utils/logger';
-import { connectDatabase } from '@/config/database';
+import { cronSchedulerService } from '@/services/cronScheduler.service';
 
 // Import routes
 import authRoutes from '@/routes/auth';
@@ -24,6 +24,7 @@ import communityRoutes from '@/routes/community';
 import nftRoutes from '@/routes/nft';
 import socialRoutes from '@/routes/social';
 import adminRoutes from '@/routes/admin';
+import nftSubscriptionRoutes from '@/routes/nft-subscription.routes';
 
 const app = express();
 const server = createServer(app);
@@ -68,6 +69,7 @@ app.use('/api/v1/communities', communityRoutes);
 app.use('/api/v1/nfts', nftRoutes);
 app.use('/api/v1/social', socialRoutes);
 app.use('/api/v1/admin', adminRoutes); // Admin routes
+app.use('/api/v1/nft-subscriptions', nftSubscriptionRoutes); // NFT subscription routes
 
 // Health check
 app.get('/health', (_req: Request, res: Response) => {
@@ -94,10 +96,16 @@ io.on('connection', (socket) => {
 const startServer = async () => {
   try {
     // await connectDatabase(); // Temporarily disabled
+
+    // Initialize cron jobs for NFT subscription management
+    cronSchedulerService.initializeCronJobs();
+    logger.info('⏰ NFT subscription cron jobs initialized');
+
     server.listen(PORT, () => {
       logger.info(`🚀 Server running on port ${PORT}`);
       logger.info(`📊 Environment: ${process.env.NODE_ENV}`);
       logger.info(`🔗 API Base URL: http://localhost:${PORT}/api/v1`);
+      logger.info('🎵 NFT-based community subscription system ready!');
 
     });
   } catch (error) {

@@ -12,6 +12,8 @@ import {
   AdminClaimAction
 } from '@/types/artist-claim.types';
 
+interface Genre { id: string; artistId: string; genreId: string; }
+
 export interface ArtistProfile {
   id: string;
   name: string;
@@ -33,7 +35,7 @@ export interface ArtistProfile {
   topTracks?: any;
   roles: string[];
   labels: string[];
-  genres: string[];
+  genres: Genre[];
   wallet?: any;
   claimedAt?: Date;
   isActive: boolean;
@@ -76,8 +78,14 @@ export class ArtistService {
             {
               OR: [
                 { name: { contains: query, mode: 'insensitive' } },
-                { genres: { hasSome: [query] } },
-                { labels: { hasSome: [query] } }
+                { genres: {
+            some: {
+              genre: {
+                name: { contains: query, mode: 'insensitive' }
+              }
+            }
+          }},
+          { labels: { hasSome: [query] } }
               ]
             }
           ]
@@ -396,7 +404,8 @@ export class ArtistService {
               communities: true,
               subscriptions: true
             }
-          }
+          },
+          genres: true
         }
       });
 
@@ -450,7 +459,8 @@ export class ArtistService {
               communities: true,
               subscriptions: true
             }
-          }
+          },
+          genres: true
         }
       });
 
@@ -534,7 +544,14 @@ export class ArtistService {
 
       // Check if artist exists
       const targetArtist = await prisma.artist.findUnique({
-        where: { id: claimData.artistId }
+        where: { id: claimData.artistId },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          genres: true,
+          claimedAt: true
+        }
       });
 
       if (!targetArtist) {
@@ -571,9 +588,10 @@ export class ArtistService {
             select: {
               id: true,
               name: true,
-              email: true
+              email: true,
+              genres: true
             }
-          }
+          },
         }
       });
 
@@ -632,7 +650,7 @@ export class ArtistService {
         if (claim.artistId) {
           // Case 1: Claiming existing artist profile
           artistId = claim.artistId;
-          
+
           // Update existing artist with user association
           await tx.artist.update({
             where: { id: claim.artistId },
@@ -652,7 +670,7 @@ export class ArtistService {
         } else {
           // Case 2: Creating new artist profile
           isNewArtist = true;
-          
+
           // Create new artist profile
           const newArtist = await tx.artist.create({
             data: {
@@ -671,8 +689,10 @@ export class ArtistService {
               popularity: 0,
               roles: [claim.role],
               labels: [],
-              genres: [],
-              claimedAt: new Date(),
+              genres: {
+            create: []
+          },
+          claimedAt: new Date(),
               isActive: true
             }
           });
@@ -805,7 +825,8 @@ export class ArtistService {
               communities: true,
               subscriptions: true
             }
-          }
+          },
+          genres: true
         }
       });
 
@@ -1025,7 +1046,13 @@ export class ArtistService {
             {
               OR: [
                 { name: { contains: query, mode: 'insensitive' } },
-                { genres: { hasSome: [query] } },
+                { genres: {
+                  some: {
+                    genre: {
+                      name: { contains: query, mode: 'insensitive' }
+                    }
+                  }
+                }},
                 { labels: { hasSome: [query] } }
               ]
             }
@@ -1038,7 +1065,15 @@ export class ArtistService {
           verified: true,
           followers: true,
           monthlyListeners: true,
-          genres: true,
+          genres: {
+            select: {
+              genre: {
+                select: {
+                  name: true
+                }
+              }
+            }
+          },
           popularity: true
         },
         orderBy: [

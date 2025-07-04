@@ -1,14 +1,21 @@
 import 'dotenv/config';
-import { 
-  spotifyApi, 
-  getValidToken, 
+import {
+  spotifyApi,
+  getValidToken,
   retryOnRateLimit,
   transformSpotifyArtist,
   transformSpotifyTrack,
   transformSpotifyRelease,
   transformSpotifyToSong,
-  prisma 
+  prisma
 } from './spotify/spotifyPrismaClient.js';
+
+interface ImportOptions {
+  limitArtists?: number;
+  limitReleases?: number;
+  limitTracks?: number;
+  dryRun?: boolean;
+}
 
 // Cache to avoid duplicate processing
 const processedCache = {
@@ -24,7 +31,7 @@ const processedCache = {
 const createArtistUser = async (spotifyArtist) => {
   const email = `artist_${spotifyArtist.id}_${Date.now()}@spotify-import.com`;
   const username = `artist_${spotifyArtist.id}`;
-  
+
   try {
     // Check if user already exists
     const existingUser = await prisma.user.findFirst({
@@ -89,11 +96,31 @@ const importArtist = async (spotifyArtist) => {
 
     // Transform and create artist
     const artistData = transformSpotifyArtist(spotifyArtist, user);
-    
+
+    // Handle genres through Genre model
+    const genreConnections = spotifyArtist.genres?.map(genreName => ({
+      genre: {
+        connectOrCreate: {
+          where: { name: genreName },
+          create: { name: genreName }
+        }
+      }
+    })) || [];
+
     const artist = await prisma.artist.create({
-      data: artistData,
+      data: {
+        ...artistData,
+        genres: {
+          create: genreConnections
+        }
+      },
       include: {
-        user: true
+        user: true,
+        genres: {
+          include: {
+            genre: true
+          }
+        }
       }
     });
 
@@ -113,7 +140,7 @@ const importArtist = async (spotifyArtist) => {
 const importSong = async (spotifyTrack) => {
   try {
     const songKey = spotifyTrack.id;
-    
+
     if (processedCache.songs.has(songKey)) {
       const existingSong = await prisma.song.findFirst({
         where: {
@@ -128,7 +155,7 @@ const importSong = async (spotifyTrack) => {
       where: {
         OR: [
           { isrc: spotifyTrack.external_ids?.isrc || null },
-          { 
+          {
             AND: [
               { fileUrl: spotifyTrack.preview_url || 'placeholder_url' },
               { duration: Math.floor((spotifyTrack.duration_ms || 0) / 1000) }
@@ -166,7 +193,7 @@ const importSong = async (spotifyTrack) => {
 const importRelease = async (spotifyAlbum, artist) => {
   try {
     const releaseKey = `${artist.id}_${spotifyAlbum.id}`;
-    
+
     if (processedCache.releases.has(releaseKey)) {
       const existingRelease = await prisma.release.findFirst({
         where: {
@@ -219,7 +246,7 @@ const importRelease = async (spotifyAlbum, artist) => {
 const importTrack = async (spotifyTrack, artist, song, release = null) => {
   try {
     const trackKey = `${artist.id}_${spotifyTrack.id}`;
-    
+
     if (processedCache.tracks.has(trackKey)) {
       console.log(`Track already processed: ${spotifyTrack.name}`);
       return null;
@@ -245,13 +272,13 @@ const importTrack = async (spotifyTrack, artist, song, release = null) => {
 
     // Create new track
     const trackData = transformSpotifyTrack(
-      spotifyTrack, 
-      artist.id, 
-      artist.userId, 
-      song.id, 
+      spotifyTrack,
+      artist.id,
+      artist.userId,
+      song.id,
       release?.id || null
     );
-    
+
     const track = await prisma.track.create({
       data: trackData
     });
@@ -269,15 +296,15 @@ const importTrack = async (spotifyTrack, artist, song, release = null) => {
 /**
  * Import artist's releases and tracks
  */
-const importArtistReleases = async (artist, spotifyArtistId, options = {}) => {
+const importArtistReleases = async (artist: any, spotifyArtistId: string, options: ImportOptions = {}) => {
   const { limitReleases = 10, limitTracks = 7 } = options;
-  
+
   try {
     await getValidToken();
     console.log(`🔍 Fetching releases for artist: ${artist.name}`);
 
     // Get artist's albums
-    const albumsResponse = await retryOnRateLimit(() => 
+    const albumsResponse = await retryOnRateLimit(() =>
       spotifyApi.getArtistAlbums(spotifyArtistId, {
         limit: limitReleases,
         include_groups: 'album,single,ep'
@@ -296,10 +323,10 @@ const importArtistReleases = async (artist, spotifyArtistId, options = {}) => {
         const release = await importRelease(album, artist);
 
         // Get tracks for this album
-        const tracksResponse = await retryOnRateLimit(() => 
+        const tracksResponse = await retryOnRateLimit(() =>
           spotifyApi.getAlbumTracks(album.id, { limit: limitTracks })
         );
-        
+
         const tracks = tracksResponse.body.items;
         console.log(`  Found ${tracks.length} tracks`);
 
@@ -308,13 +335,13 @@ const importArtistReleases = async (artist, spotifyArtistId, options = {}) => {
           try {
             // Import song first
             const song = await importSong(track);
-            
+
             // Import track
             await importTrack(track, artist, song, release);
-            
+
             // Small delay to avoid overwhelming the API
             await new Promise(resolve => setTimeout(resolve, 100));
-            
+
           } catch (trackError) {
             console.error(`  ❌ Error importing track ${track.name}:`, trackError.message);
           }
@@ -339,16 +366,16 @@ const importArtistReleases = async (artist, spotifyArtistId, options = {}) => {
 /**
  * Search and import artist by name
  */
-const importArtistByName = async (artistName, options = {}) => {
-  const { 
-    limitReleases = 5, 
+const importArtistByName = async (artistName: string, options: ImportOptions = {}) => {
+  const {
+    limitReleases = 5,
     limitTracks = 7,
-    dryRun = false 
+    dryRun = false
   } = options;
 
   try {
     console.log(`🎵 Searching for artist: "${artistName}"`);
-    
+
     await getValidToken();
 
     // Search for artist on Spotify
@@ -398,7 +425,7 @@ const importArtistByName = async (artistName, options = {}) => {
 /**
  * Import multiple artists by genre
  */
-const importArtistsByGenre = async (genreName, options = {}) => {
+const importArtistsByGenre = async (genreName: string, options: ImportOptions = {}) => {
   const {
     limitArtists = 5,
     limitReleases = 3,
@@ -408,7 +435,7 @@ const importArtistsByGenre = async (genreName, options = {}) => {
 
   try {
     console.log(`🎵 Searching for ${genreName} artists on Spotify...`);
-    
+
     await getValidToken();
 
     // Search for artists by genre
@@ -472,15 +499,15 @@ const importArtistsByGenre = async (genreName, options = {}) => {
 /**
  * CLI execution
  */
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (require.main === module) {
   (async () => {
     try {
       const args = process.argv.slice(2);
       const dryRun = args.includes('--dry-run');
       const genreMode = args.includes('--genre');
-      
+
       let searchTerm;
-      let options = { dryRun };
+      let options:ImportOptions = { dryRun };
 
       // Parse arguments
       if (genreMode) {
@@ -513,7 +540,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       console.log(`Search: ${genreMode ? 'Genre' : 'Artist'} - "${searchTerm}"\n`);
 
       const startTime = Date.now();
-      
+
       let result;
       if (genreMode) {
         result = await importArtistsByGenre(searchTerm, options);
@@ -534,7 +561,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   })();
 }
 
-export { 
+export {
   importArtistByName,
   importArtistsByGenre,
   importArtist,

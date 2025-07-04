@@ -124,12 +124,22 @@ export interface  TransactionDetails {
     events: any[];
 }
 
+export interface eventData {
+    recipientAddress: any;
+    tokenId: number;
+    param: number;
+    contractAddress: number;
+    blockNumber: any;
+    transactionHash: any;
+    status: any;
+}
+
 /**
  * Transaction result interface
  */
 export interface TransactionResult {
   transactionHash: string;
-  eventData?: unknown;
+  eventData?: eventData;
   mintEvent?: unknown;
   details?: TransactionDetails;
   status?: string;

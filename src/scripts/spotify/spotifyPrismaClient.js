@@ -92,7 +92,7 @@ const transformSpotifyArtist = (spotifyArtist, user) => {
     topTracks: [],
     roles: ['musician'],
     labels: [],
-    genres: spotifyArtist.genres || [],
+
     artistId: spotifyArtist.id
   };
 };
@@ -108,7 +108,15 @@ const transformSpotifyTrack = (spotifyTrack, artistId, userId, songId, releaseId
     releaseId,
     duration: Math.floor((spotifyTrack.duration_ms || 0) / 1000), // Convert to seconds
     fileUrl: spotifyTrack.preview_url || 'placeholder_url',
-    genre: spotifyTrack.album?.genres || ['unknown'],
+    genres: {
+      create: (spotifyTrack.album?.genres || ['unknown']).map(genreName => ({
+        genre: {
+          connectOrCreate: {
+            where: { name: genreName },
+            create: { name: genreName }
+          }
+        }
+      }))},
     bpm: Math.floor(Math.random() * 60) + 70, // Random BPM between 70-130
     key: ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'][Math.floor(Math.random() * 12)],
     mood: ['Energetic', 'Calm', 'Happy', 'Melancholic'][Math.floor(Math.random() * 4)],
@@ -161,7 +169,14 @@ const transformSpotifyRelease = (spotifyAlbum, artistId) => {
       }
     },
     metadata: {
-      genre: spotifyAlbum.genres?.length ? [spotifyAlbum.genres[0]] : ['unknown'],
+      genres: (spotifyAlbum.genres || ['unknown']).map(genreName => ({
+        genre: {
+          connectOrCreate: {
+            where: { name: genreName },
+            create: { name: genreName }
+          }
+        }
+      })),
       totalTracks: spotifyAlbum.total_tracks || 0,
       spotifyId: spotifyAlbum.id,
       language: 'en'

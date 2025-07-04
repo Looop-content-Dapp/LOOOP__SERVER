@@ -2,597 +2,749 @@
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
-  provider = "prisma-client-js"
+    provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+    provider = "postgresql"
+    url      = env("DATABASE_URL")
 }
 
 // Enum definitions for admin system
 enum UserRole {
-  USER
-  ADMIN
-  SUPER_ADMIN
-  MODERATOR
+    USER
+    ADMIN
+    SUPER_ADMIN
+    MODERATOR
 }
 
 enum AdminLevel {
-  MODERATOR     // Can moderate content, approve basic requests
-  ADMIN         // Can approve artist claims, manage users, create playlists
-  SUPER_ADMIN   // Full system access, can promote/demote admins
+    MODERATOR // Can moderate content, approve basic requests
+    ADMIN // Can approve artist claims, manage users, create playlists
+    SUPER_ADMIN // Full system access, can promote/demote admins
+}
+
+enum AuthProvider {
+    GOOGLE
+    APPLE
+    EMAIL
 }
 
 // User model for LOOOP platform
 model User {
-  id            String   @id @default(cuid())
-  name          String
-  email         String   @unique
-  password      String
-  emailVerified Boolean  @default(false)
-  image         String?
-  username      String?  @unique
-  bio           String?
-  isVerified    Boolean  @default(false)
-  lastLoginAt   DateTime?
-  lastUsernameChangeAt DateTime?
-  DateOfBirth   DateTime?
-  country       String?
+    id                   String       @id @default(cuid())
+    name                 String
+    email                String       @unique
+    password             String
+    emailVerified        Boolean      @default(false)
+    image                String?
+    username             String?      @unique
+    bio                  String?
+    isVerified           Boolean      @default(false)
+    lastLoginAt          DateTime?
+    lastUsernameChangeAt DateTime?
+    DateOfBirth          DateTime?
+    country              String?
+    authProvider         AuthProvider?
 
-  // Admin roles and permissions
-  role          UserRole @default(USER)
-  permissions   String[] @default([])
-  isAdmin       Boolean  @default(false)
-  adminLevel    AdminLevel? // Super admin, admin, moderator
-  adminApprovedAt DateTime?
-  adminApprovedBy String?
+    // Admin roles and permissions
+    role            UserRole    @default(USER)
+    permissions     String[]    @default([])
+    isAdmin         Boolean     @default(false)
+    adminLevel      AdminLevel? // Super admin, admin, moderator
+    adminApprovedAt DateTime?
+    adminApprovedBy String?
 
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
 
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+    // LOOOP platform relations
+    artist             Artist?
+    tracks             Track[]
+    playlists          Playlist[]
+    likes              Like[]
+    comments           Comment[]
+    posts              Post[]
+    following          Follow[]             @relation("UserFollowing")
+    followers          Follow[]             @relation("UserFollowers")
+    nfts               NFT[]
+    communities        CommunityMember[]
+    playHistory        PlayHistory[]
+    subscriptions      UserSubscription[]
+    referrals          Referral[]           @relation("UserReferrals")
+    referred           Referral?            @relation("UserReferred")
+    wallet             Wallet?
+    UserReward         UserReward[]
+    preferences        UserPreference?
+    artistClaims       ArtistClaim[]
+    nftMemberships     NFTMembership[]
+    transactionHistory TransactionHistory[]
 
-  // LOOOP platform relations
-  artist        Artist?
-  tracks        Track[]
-  playlists     Playlist[]
-  likes         Like[]
-  comments      Comment[]
-  posts         Post[]
-  following     Follow[]           @relation("UserFollowing")
-  followers     Follow[]           @relation("UserFollowers")
-  nfts          NFT[]
-  communities   CommunityMember[]
-  playHistory   PlayHistory[]
-  subscriptions UserSubscription[]
-  referrals     Referral[]         @relation("UserReferrals")
-  referred      Referral?          @relation("UserReferred")
-  wallet        Wallet?
-  UserReward    UserReward[]
-  preferences   UserPreference?
-  artistClaims  ArtistClaim[]
-
-  @@map("user")
+    @@map("user")
 }
 
 // Verification model for email verification and password reset
 model Verification {
-  id         String   @id @default(cuid())
-  identifier String
-  value      String
-  expiresAt  DateTime
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+    id         String   @id @default(cuid())
+    identifier String
+    value      String
+    expiresAt  DateTime
+    createdAt  DateTime @default(now())
+    updatedAt  DateTime @updatedAt
 
-  @@map("verification")
+    @@map("verification")
 }
 
 model Artist {
-  id               String    @id @default(cuid())
-  userId           String    @unique
-  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  artistId         String?
-  name             String
-  email            String    @unique
-  profileImage     String?
-  biography        String?
-  address1         String?
-  address2         String?
-  country          String?
-  postalcode       String?
-  city             String?
-  websiteurl       String?
-  monthlyListeners Int       @default(0)
-  followers        Int       @default(0)
-  isFollowed       Boolean   @default(false)
-  verified         Boolean   @default(false)
-  verifiedAt       DateTime?
-  socialLinks      Json?
-  popularity       Int       @default(0)
-  topTracks        Json?
-  roles            String[]
-  labels           String[]
-  isActive         Boolean   @default(true)
-  genres           Genre[]   @relation("ArtistGenres")
-  wallet           Json?
-  claimedAt        DateTime?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+    id               String        @id @default(cuid())
+    userId           String        @unique
+    user             User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+    artistId         String?
+    name             String
+    email            String        @unique
+    profileImage     String?
+    biography        String?
+    address1         String?
+    address2         String?
+    country          String?
+    postalcode       String?
+    city             String?
+    websiteurl       String?
+    monthlyListeners Int           @default(0)
+    followers        Int           @default(0)
+    isFollowed       Boolean       @default(false)
+    verified         Boolean       @default(false)
+    verifiedAt       DateTime?
+    socialLinks      Json?
+    popularity       Int           @default(0)
+    topTracks        Json?
+    roles            String[]
+    labels           String[]
+    isActive         Boolean       @default(true)
+    genres           ArtistGenre[]
+    wallet           Json?
+    claimedAt        DateTime?
+    createdAt        DateTime      @default(now())
+    updatedAt        DateTime      @updatedAt
 
-  // Relations
-  tracks            Track[]
-  albums            Album[]
-  communities       Community[]
-  releases          Release[]
-  subscriptionPlans ArtistSubscriptionPlan[]
-  subscriptions     UserSubscription[]
-  claims            ArtistClaim[]
-  analyticsDaily    ArtistAnalyticsDaily[]
+    // Relations
+    tracks                Track[]
+    albums                Album[]
+    communities           Community[]
+    releases              Release[]
+    subscriptionPlans     ArtistSubscriptionPlan[]
+    subscriptions         UserSubscription[]
+    claims                ArtistClaim[]
+    analyticsDaily        ArtistAnalyticsDaily[]
+    nftCollections        NFTCollection[]
+    transactionHistory    TransactionHistory[]
+    subscriptionAnalytics SubscriptionAnalytics[]
 
-  @@map("artists")
+    @@map("artists")
 }
 
 model Track {
-  id         String   @id @default(cuid())
-  title      String
-  version    String   @default("Original")
-  artistId   String
-  artist     Artist   @relation(fields: [artistId], references: [id], onDelete: Cascade)
-  albumId    String?
-  album      Album?   @relation(fields: [albumId], references: [id])
-  releaseId  String?
-  release    Release? @relation("ReleaseTracks", fields: [releaseId], references: [id])
-  songId     String?
-  song       Song?    @relation("SongTracks", fields: [songId], references: [id])
-  userId     String
-  user       User     @relation(fields: [userId], references: [id])
-  duration   Int // Duration in seconds
-  fileUrl    String
-  artworkUrl String?
-  genre      String[]
-  bpm        Int?
-  key        String?
-  mood       String[]
-  tags       String[]
-  isPublic   Boolean  @default(true)
-  playCount  Int      @default(0)
-  likeCount  Int      @default(0)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+    id         String   @id @default(cuid())
+    title      String
+    version    String   @default("Original")
+    artistId   String
+    artist     Artist   @relation(fields: [artistId], references: [id], onDelete: Cascade)
+    albumId    String?
+    album      Album?   @relation(fields: [albumId], references: [id])
+    releaseId  String?
+    release    Release? @relation("ReleaseTracks", fields: [releaseId], references: [id])
+    songId     String?
+    song       Song?    @relation("SongTracks", fields: [songId], references: [id])
+    userId     String
+    user       User     @relation(fields: [userId], references: [id])
+    duration   Int // Duration in seconds
+    fileUrl    String
+    artworkUrl String?
+    genre      String[]
+    bpm        Int?
+    key        String?
+    mood       String[]
+    tags       String[]
+    isPublic   Boolean  @default(true)
+    playCount  Int      @default(0)
+    likeCount  Int      @default(0)
+    createdAt  DateTime @default(now())
+    updatedAt  DateTime @updatedAt
 
-  // Enhanced metadata
-  metadata     Json?
-  credits      Json?
-  lyrics       Json?
-  interactions Json?
-  regionalData Json?
-  flags        Json?
+    // Enhanced metadata
+    metadata     Json?
+    credits      Json?
+    lyrics       Json?
+    interactions Json?
+    regionalData Json?
+    flags        Json?
 
-  // Relations
-  playlistTracks PlaylistTrack[]
-  likes          Like[]
-  comments       Comment[]
-  playHistory    PlayHistory[]
+    // Relations
+    playlistTracks PlaylistTrack[]
+    likes          Like[]
+    comments       Comment[]
+    playHistory    PlayHistory[]
 
-  @@map("tracks")
+    @@map("tracks")
 }
 
 model Album {
-  id          String    @id @default(cuid())
-  title       String
-  slug        String    @unique
-  artistId    String
-  artist      Artist    @relation(fields: [artistId], references: [id], onDelete: Cascade)
-  artworkUrl  String?
-  releaseDate DateTime?
-  isPublic    Boolean   @default(true)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+    id          String    @id @default(cuid())
+    title       String
+    slug        String    @unique
+    artistId    String
+    artist      Artist    @relation(fields: [artistId], references: [id], onDelete: Cascade)
+    artworkUrl  String?
+    releaseDate DateTime?
+    isPublic    Boolean   @default(true)
+    createdAt   DateTime  @default(now())
+    updatedAt   DateTime  @updatedAt
 
-  // Relations
-  tracks Track[]
+    // Relations
+    tracks Track[]
 
-  @@map("albums")
+    @@map("albums")
 }
 
 model Playlist {
-  id          String   @id @default(cuid())
-  title       String
-  description String?
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  isPublic    Boolean  @default(true)
-  artworkUrl  String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+    id          String   @id @default(cuid())
+    title       String
+    description String?
+    userId      String
+    user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+    isPublic    Boolean  @default(true)
+    artworkUrl  String?
+    createdAt   DateTime @default(now())
+    updatedAt   DateTime @updatedAt
 
-  // Relations
-  tracks PlaylistTrack[]
+    // Relations
+    tracks PlaylistTrack[]
 
-  @@map("playlists")
+    @@map("playlists")
 }
 
 model PlaylistTrack {
-  id         String   @id @default(cuid())
-  playlistId String
-  playlist   Playlist @relation(fields: [playlistId], references: [id], onDelete: Cascade)
-  trackId    String
-  track      Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
-  position   Int
-  addedAt    DateTime @default(now())
+    id         String   @id @default(cuid())
+    playlistId String
+    playlist   Playlist @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+    trackId    String
+    track      Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
+    position   Int
+    addedAt    DateTime @default(now())
 
-  @@unique([playlistId, trackId])
-  @@map("playlist_tracks")
+    @@unique([playlistId, trackId])
+    @@map("playlist_tracks")
 }
 
 model Like {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  trackId   String
-  track     Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
+    id        String   @id @default(cuid())
+    userId    String
+    user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+    trackId   String
+    track     Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
+    createdAt DateTime @default(now())
 
-  @@unique([userId, trackId])
-  @@map("likes")
+    @@unique([userId, trackId])
+    @@map("likes")
 }
 
 model Comment {
-  id        String    @id @default(cuid())
-  content   String
-  userId    String
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  trackId   String?
-  track     Track?    @relation(fields: [trackId], references: [id], onDelete: Cascade)
-  postId    String?
-  post      Post?     @relation(fields: [postId], references: [id], onDelete: Cascade)
-  parentId  String?
-  parent    Comment?  @relation("CommentReplies", fields: [parentId], references: [id])
-  replies   Comment[] @relation("CommentReplies")
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+    id        String    @id @default(cuid())
+    content   String
+    userId    String
+    user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+    trackId   String?
+    track     Track?    @relation(fields: [trackId], references: [id], onDelete: Cascade)
+    postId    String?
+    post      Post?     @relation(fields: [postId], references: [id], onDelete: Cascade)
+    parentId  String?
+    parent    Comment?  @relation("CommentReplies", fields: [parentId], references: [id])
+    replies   Comment[] @relation("CommentReplies")
+    createdAt DateTime  @default(now())
+    updatedAt DateTime  @updatedAt
 
-  @@map("comments")
+    @@map("comments")
 }
 
 model Follow {
-  id          String   @id @default(cuid())
-  followerId  String
-  follower    User     @relation("UserFollowing", fields: [followerId], references: [id], onDelete: Cascade)
-  followingId String
-  following   User     @relation("UserFollowers", fields: [followingId], references: [id], onDelete: Cascade)
-  createdAt   DateTime @default(now())
+    id          String   @id @default(cuid())
+    followerId  String
+    follower    User     @relation("UserFollowing", fields: [followerId], references: [id], onDelete: Cascade)
+    followingId String
+    following   User     @relation("UserFollowers", fields: [followingId], references: [id], onDelete: Cascade)
+    createdAt   DateTime @default(now())
 
-  @@unique([followerId, followingId])
-  @@map("follows")
+    @@unique([followerId, followingId])
+    @@map("follows")
 }
 
 model Community {
-  id           String   @id @default(cuid())
-  name         String
-  description  String?
-  artistId     String
-  artist       Artist   @relation(fields: [artistId], references: [id], onDelete: Cascade)
-  imageUrl     String?
-  isActive     Boolean  @default(true)
-  monthlyPrice Decimal? // Price for monthly NFT access
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+    id           String   @id @default(cuid())
+    name         String
+    description  String?
+    artistId     String
+    artist       Artist   @relation(fields: [artistId], references: [id], onDelete: Cascade)
+    imageUrl     String?
+    isActive     Boolean  @default(true)
+    monthlyPrice Decimal? // Price for monthly NFT access
+    createdAt    DateTime @default(now())
+    updatedAt    DateTime @updatedAt
 
-  // Relations
-  members CommunityMember[]
-  posts   Post[]
-  nfts    NFT[]
+    // Relations
+    members               CommunityMember[]
+    posts                 Post[]
+    nfts                  NFT[]
+    nftCollections        NFTCollection[]
+    nftMemberships        NFTMembership[]
+    subscriptionAnalytics SubscriptionAnalytics[]
 
-  @@map("communities")
+    @@map("communities")
 }
 
 model CommunityMember {
-  id          String    @id @default(cuid())
-  userId      String
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  communityId String
-  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
-  joinedAt    DateTime  @default(now())
-  isActive    Boolean   @default(true)
+    id          String    @id @default(cuid())
+    userId      String
+    user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+    communityId String
+    community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+    joinedAt    DateTime  @default(now())
+    isActive    Boolean   @default(true)
 
-  @@unique([userId, communityId])
-  @@map("community_members")
+    @@unique([userId, communityId])
+    @@map("community_members")
 }
 
 model Post {
-  id           String     @id @default(cuid())
-  content      String
-  imageUrl     String?
-  userId       String
-  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  communityId  String?
-  community    Community? @relation(fields: [communityId], references: [id])
-  likeCount    Int        @default(0)
-  commentCount Int        @default(0)
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+    id           String     @id @default(cuid())
+    content      String
+    imageUrl     String?
+    userId       String
+    user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+    communityId  String?
+    community    Community? @relation(fields: [communityId], references: [id])
+    likeCount    Int        @default(0)
+    commentCount Int        @default(0)
+    createdAt    DateTime   @default(now())
+    updatedAt    DateTime   @updatedAt
 
-  // Relations
-  comments Comment[]
+    // Relations
+    comments Comment[]
 
-  @@map("posts")
+    @@map("posts")
 }
 
 model NFT {
-  id              String     @id @default(cuid())
-  tokenId         String     @unique
-  name            String
-  description     String?
-  imageUrl        String?
-  contractAddress String
-  ownerId         String
-  owner           User       @relation(fields: [ownerId], references: [id])
-  communityId     String?
-  community       Community? @relation(fields: [communityId], references: [id])
-  mintedAt        DateTime   @default(now())
-  expiresAt       DateTime?
-  isActive        Boolean    @default(true)
+    id              String     @id @default(cuid())
+    tokenId         String     @unique
+    name            String
+    description     String?
+    imageUrl        String?
+    contractAddress String
+    ownerId         String
+    owner           User       @relation(fields: [ownerId], references: [id])
+    communityId     String?
+    community       Community? @relation(fields: [communityId], references: [id])
+    mintedAt        DateTime   @default(now())
+    expiresAt       DateTime?
+    isActive        Boolean    @default(true)
 
-  @@map("nfts")
+    @@map("nfts")
 }
 
 model PlayHistory {
-  id       String   @id @default(cuid())
-  userId   String
-  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  trackId  String
-  track    Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
-  playedAt DateTime @default(now())
-  duration Int? // How long the track was played in seconds
+    id       String   @id @default(cuid())
+    userId   String
+    user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+    trackId  String
+    track    Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
+    playedAt DateTime @default(now())
+    duration Int? // How long the track was played in seconds
 
-  @@map("play_history")
+    @@map("play_history")
 }
 
 model Release {
-  id                 String    @id @default(cuid())
-  title              String
-  artistId           String
-  artist             Artist    @relation(fields: [artistId], references: [id], onDelete: Cascade)
-  type               String // single, ep, album, compilation, live, remix, deluxe, remaster
-  releaseDate        DateTime
-  announcementDate   DateTime?
-  submittedDate      DateTime?
-  artwork            Json? // cover images and color palette
-  metadata           Json? // genre, language, tags, etc.
-  commercial         Json? // label, upc, copyright info
-  description        String?
-  contentInfo        Json? // explicit content flags
-  distribution       Json? // status, territories, exclusions
-  verificationStatus String    @default("pending") // pending, approved, rejected
-  moderationNotes    String?
-  verifiedAt         DateTime?
-  availability       Json? // regions, restrictions, platforms
-  analytics          Json? // streams, listeners, saves, etc.
-  credits            Json? // enhanced credits system
-  tags               Json? // user, system, genre, mood tags
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
+    id                 String    @id @default(cuid())
+    title              String
+    artistId           String
+    artist             Artist    @relation(fields: [artistId], references: [id], onDelete: Cascade)
+    type               String // single, ep, album, compilation, live, remix, deluxe, remaster
+    releaseDate        DateTime
+    announcementDate   DateTime?
+    submittedDate      DateTime?
+    artwork            Json? // cover images and color palette
+    metadata           Json? // genre, language, tags, etc.
+    commercial         Json? // label, upc, copyright info
+    description        String?
+    contentInfo        Json? // explicit content flags
+    distribution       Json? // status, territories, exclusions
+    verificationStatus String    @default("pending") // pending, approved, rejected
+    moderationNotes    String?
+    verifiedAt         DateTime?
+    availability       Json? // regions, restrictions, platforms
+    analytics          Json? // streams, listeners, saves, etc.
+    credits            Json? // enhanced credits system
+    tags               Json? // user, system, genre, mood tags
+    createdAt          DateTime  @default(now())
+    updatedAt          DateTime  @updatedAt
 
-  // Relations
-  tracks Track[] @relation("ReleaseTracks")
+    // Relations
+    tracks Track[] @relation("ReleaseTracks")
 
-  @@map("releases")
+    @@map("releases")
 }
 
 model Song {
-  id            String   @id @default(cuid())
-  fileUrl       String
-  duration      Int // Duration in seconds
-  bitrate       Int
-  format        String // mp3, wav, aac, flac, mpeg
-  analytics     Json? // streams, listeners, playlists, shares, etc.
-  streamHistory Json? // detailed stream tracking
-  engagement    Json? // skip rate, completion rate, etc.
-  playlists     Json? // playlist associations
-  waveform      Json? // waveform data
-  lyrics        String?
-  isrc          String?  @unique
-  audioQuality  Json? // peak, average volume, dynamic range
-  flags         Json? // explicit, instrumental, etc.
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+    id            String   @id @default(cuid())
+    fileUrl       String
+    duration      Int // Duration in seconds
+    bitrate       Int
+    format        String // mp3, wav, aac, flac, mpeg
+    analytics     Json? // streams, listeners, playlists, shares, etc.
+    streamHistory Json? // detailed stream tracking
+    engagement    Json? // skip rate, completion rate, etc.
+    playlists     Json? // playlist associations
+    waveform      Json? // waveform data
+    lyrics        String?
+    isrc          String?  @unique
+    audioQuality  Json? // peak, average volume, dynamic range
+    flags         Json? // explicit, instrumental, etc.
+    createdAt     DateTime @default(now())
+    updatedAt     DateTime @updatedAt
 
-  // Relations
-  tracks Track[] @relation("SongTracks")
+    // Relations
+    tracks Track[] @relation("SongTracks")
 
-  @@map("songs")
+    @@map("songs")
 }
 
 model ArtistSubscriptionPlan {
-  id          String   @id @default(cuid())
-  artistId    String
-  artist      Artist   @relation(fields: [artistId], references: [id], onDelete: Cascade)
-  name        String
-  description String?
-  price       Decimal
-  currency    String   @default("USD")
-  duration    Int // Duration in days
-  benefits    Json? // List of benefits
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+    id          String   @id @default(cuid())
+    artistId    String
+    artist      Artist   @relation(fields: [artistId], references: [id], onDelete: Cascade)
+    name        String
+    description String?
+    price       Decimal
+    currency    String   @default("USD")
+    duration    Int // Duration in days
+    benefits    Json? // List of benefits
+    isActive    Boolean  @default(true)
+    createdAt   DateTime @default(now())
+    updatedAt   DateTime @updatedAt
 
-  // Relations
-  subscriptions UserSubscription[]
+    // Relations
+    subscriptions UserSubscription[]
 
-  @@map("artist_subscription_plans")
+    @@map("artist_subscription_plans")
 }
 
 model UserSubscription {
-  id               String                 @id @default(cuid())
-  userId           String
-  user             User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  planId           String
-  plan             ArtistSubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
-  artistId         String
-  artist           Artist                 @relation(fields: [artistId], references: [id], onDelete: Cascade)
-  status           String                 @default("pending") // pending, active, cancelled, expired
-  startDate        DateTime               @default(now())
-  endDate          DateTime
-  autoRenew        Boolean                @default(true)
-  cancellationDate DateTime?
-  paymentHistory   Json? // Array of payment records
-  createdAt        DateTime               @default(now())
-  updatedAt        DateTime               @updatedAt
+    id               String                 @id @default(cuid())
+    userId           String
+    user             User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+    planId           String
+    plan             ArtistSubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+    artistId         String
+    artist           Artist                 @relation(fields: [artistId], references: [id], onDelete: Cascade)
+    status           String                 @default("pending") // pending, active, cancelled, expired
+    startDate        DateTime               @default(now())
+    endDate          DateTime
+    autoRenew        Boolean                @default(true)
+    cancellationDate DateTime?
+    paymentHistory   Json? // Array of payment records
+    createdAt        DateTime               @default(now())
+    updatedAt        DateTime               @updatedAt
 
-  @@unique([userId, artistId])
-  @@map("user_subscriptions")
+    @@unique([userId, artistId])
+    @@map("user_subscriptions")
 }
 
 model Wallet {
-  id                String                 @id @default(cuid())
-  email               String   @unique
-  address             String   @unique
-  publickey           String   @unique
-  encryptedPrivateKey String?  @unique
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
-  user                User     @relation(fields: [userId], references: [id])
-  userId              String   @unique
+    id                  String   @id @default(cuid())
+    email               String   @unique
+    address             String   @unique
+    publickey           String   @unique
+    encryptedPrivateKey String?  @unique
+    createdAt           DateTime @default(now())
+    updatedAt           DateTime @updatedAt
+    user                User     @relation(fields: [userId], references: [id])
+    userId              String   @unique
 
-  @@map("wallets")
+    @@map("wallets")
 }
 
 model Referral {
-  id          String           @id @default(cuid())
-  referrerId  String
-  referrer    User             @relation("UserReferrals", fields: [referrerId], references: [id], onDelete: Cascade)
-  referredId  String           @unique
-  referred    User             @relation("UserReferred", fields: [referredId], references: [id], onDelete: Cascade)
-  code        String           @unique
-  status      String           @default("pending") // pending, completed, expired
-  reward      Json? // Reward details
-  completedAt DateTime?
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
-  rewards     ReferralReward[] @relation("ReferralRewards")
+    id          String           @id @default(cuid())
+    referrerId  String
+    referrer    User             @relation("UserReferrals", fields: [referrerId], references: [id], onDelete: Cascade)
+    referredId  String           @unique
+    referred    User             @relation("UserReferred", fields: [referredId], references: [id], onDelete: Cascade)
+    code        String           @unique
+    status      String           @default("pending") // pending, completed, expired
+    reward      Json? // Reward details
+    completedAt DateTime?
+    createdAt   DateTime         @default(now())
+    updatedAt   DateTime         @updatedAt
+    rewards     ReferralReward[] @relation("ReferralRewards")
 
-  @@map("referrals")
+    @@map("referrals")
 }
 
 model ReferralReward {
-  id         String    @id @default(cuid())
-  referralId String
-  referral   Referral  @relation("ReferralRewards", fields: [referralId], references: [id], onDelete: Cascade)
-  reward     Json? // Reward details
-  claimedAt  DateTime?
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+    id         String    @id @default(cuid())
+    referralId String
+    referral   Referral  @relation("ReferralRewards", fields: [referralId], references: [id], onDelete: Cascade)
+    reward     Json? // Reward details
+    claimedAt  DateTime?
+    createdAt  DateTime  @default(now())
+    updatedAt  DateTime  @updatedAt
 
-  @@map("referral_rewards")
+    @@map("referral_rewards")
 }
 
 model UserReward {
-  id        String    @id @default(cuid())
-  userId    String
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  reward    Json? // Reward details
-  claimedAt DateTime?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+    id        String    @id @default(cuid())
+    userId    String
+    user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+    reward    Json? // Reward details
+    claimedAt DateTime?
+    createdAt DateTime  @default(now())
+    updatedAt DateTime  @updatedAt
 
-  @@map("user_rewards")
+    @@map("user_rewards")
 }
 
 model UserPreference {
-  id        String @id @default(cuid())
-  userId    String @unique
-  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  settings  Json
+    id       String @id @default(cuid())
+    userId   String @unique
+    user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+    settings Json
 
-  @@index([userId])
-  @@map("user_preferences")
+    @@index([userId])
+    @@map("user_preferences")
 }
 
 model ArtistClaim {
-  id          String   @id @default(cuid())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+    id     String @id @default(cuid())
+    userId String
+    user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  // Artist information
-  artistId    String?
-  artist      Artist?  @relation(fields: [artistId], references: [id], onDelete: Cascade)
-  artistName  String   // For new artist claims
+    // Artist information
+    artistId   String?
+    artist     Artist? @relation(fields: [artistId], references: [id], onDelete: Cascade)
+    artistName String // For new artist claims
 
-  // Claimant information
-  role        String   // artist, manager, label_rep, band_member, etc.
-  fullName    String
-  email       String
-  phone       String?
-  companyName String?
+    // Claimant information
+    role        String // artist, manager, label_rep, band_member, etc.
+    fullName    String
+    email       String
+    phone       String?
+    companyName String?
 
-  // Verification data
-  officialEmail     String?
-  websiteUrl        String?
-  socialLinks       Json?     // Instagram, Twitter, TikTok, Facebook, etc.
-  distributorInfo   Json?     // DistroKid, TuneCore, AWAL integration data
-  connectionDetails String?   // How they're connected to the artist
-  evidenceUrls      String[]  // Multiple evidence URLs
+    // Verification data
+    officialEmail     String?
+    websiteUrl        String?
+    socialLinks       Json? // Instagram, Twitter, TikTok, Facebook, etc.
+    distributorInfo   Json? // DistroKid, TuneCore, AWAL integration data
+    connectionDetails String? // How they're connected to the artist
+    evidenceUrls      String[] // Multiple evidence URLs
 
-  // Status and processing
-  status            String   @default("pending") // pending, under_review, approved, rejected, info_required
-  submissionType    String   @default("manual") // manual, distributor_verified
-  reviewNotes       String?
-  rejectionReason   String?
-  adminUserId       String?
+    // Status and processing
+    status          String  @default("pending") // pending, under_review, approved, rejected, info_required
+    submissionType  String  @default("manual") // manual, distributor_verified
+    reviewNotes     String?
+    rejectionReason String?
+    adminUserId     String?
 
-  // Timestamps
-  submittedAt       DateTime @default(now())
-  reviewedAt        DateTime?
-  approvedAt        DateTime?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+    // Timestamps
+    submittedAt DateTime  @default(now())
+    reviewedAt  DateTime?
+    approvedAt  DateTime?
+    createdAt   DateTime  @default(now())
+    updatedAt   DateTime  @updatedAt
 
-  @@index([userId])
-  @@index([artistId])
-  @@index([status])
-  @@index([email])
-  @@index([artistName])
-  @@map("artist_claims")
+    @@index([userId])
+    @@index([artistId])
+    @@index([status])
+    @@index([email])
+    @@index([artistName])
+    @@map("artist_claims")
 }
 
 model ArtistAnalyticsDaily {
-  id              String   @id @default(cuid())
-  artistId        String
-  artist          Artist   @relation(fields: [artistId], references: [id], onDelete: Cascade)
-  date            DateTime
-  playCount       Int
-  followerCount   Int
+    id            String   @id @default(cuid())
+    artistId      String
+    artist        Artist   @relation(fields: [artistId], references: [id], onDelete: Cascade)
+    date          DateTime
+    playCount     Int
+    followerCount Int
 
-  @@unique([artistId, date])
-  @@index([artistId])
-  @@index([date])
-  @@map("artist_analytics_daily")
+    @@unique([artistId, date])
+    @@index([artistId])
+    @@index([date])
+    @@map("artist_analytics_daily")
 }
 
 model Genre {
-  id        String @id @default(cuid())
-  name      String
-  artists   ArtistGenre[] // Add this line
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+    id        String        @id @default(cuid())
+    name      String
+    artists   ArtistGenre[]
+    createdAt DateTime      @default(now())
+    updatedAt DateTime      @updatedAt
 
-  @@unique([name])
-  @@index([id])
-  @@index([name])
-  @@map("genres")
+    @@unique([name])
+    @@index([id])
+    @@index([name])
+    @@map("genres")
 }
 
 model ArtistGenre {
-  id        String @id @default(cuid())
-  artistId  String
-  artist    Artist @relation(fields: [artistId], references: [id], onDelete: Cascade)
-  genreId   String
-  genre     Genre  @relation(fields: [genreId], references: [id], onDelete: Cascade)
+    id       String @id @default(cuid())
+    artistId String
+    artist   Artist @relation(fields: [artistId], references: [id], onDelete: Cascade)
+    genreId  String
+    genre    Genre  @relation(fields: [genreId], references: [id], onDelete: Cascade)
 
-  @@unique([artistId, genreId])
-  @@index([artistId])
-  @@index([genreId])
-  @@map("artist_genres")
+    @@unique([artistId, genreId])
+    @@index([artistId])
+    @@index([genreId])
+    @@map("artist_genres")
+}
+
+// NFT Collections for community subscriptions
+model NFTCollection {
+    id              String    @id @default(cuid())
+    name            String
+    symbol          String
+    description     String?
+    communityId     String
+    community       Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+    artistId        String
+    artist          Artist    @relation(fields: [artistId], references: [id], onDelete: Cascade)
+    contractAddress String?   @unique
+    totalSupply     Int       @default(0)
+    maxSupply       Int?
+    pricePerMonth   Decimal
+    currency        String    @default("USDC")
+    imageUrl        String?
+    metadataUrl     String?
+    isActive        Boolean   @default(true)
+    createdAt       DateTime  @default(now())
+    updatedAt       DateTime  @updatedAt
+
+    // Relations
+    memberships NFTMembership[]
+    analytics   SubscriptionAnalytics[]
+
+    @@index([communityId])
+    @@index([artistId])
+    @@index([contractAddress])
+    @@map("nft_collections")
+}
+
+// User NFT memberships tracking
+model NFTMembership {
+    id              String        @id @default(cuid())
+    userId          String
+    user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+    communityId     String
+    community       Community     @relation(fields: [communityId], references: [id], onDelete: Cascade)
+    collectionId    String
+    collection      NFTCollection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+    tokenId         String
+    contractAddress String
+    transactionHash String
+    mintedAt        DateTime      @default(now())
+    expiresAt       DateTime
+    isActive        Boolean       @default(true)
+    autoRenew       Boolean       @default(true)
+    reminderSent    Boolean       @default(false)
+    createdAt       DateTime      @default(now())
+    updatedAt       DateTime      @updatedAt
+
+    @@unique([tokenId, contractAddress])
+    @@index([userId])
+    @@index([communityId])
+    @@index([collectionId])
+    @@index([tokenId])
+    @@index([expiresAt])
+    @@index([isActive])
+    @@map("nft_memberships")
+}
+
+// Transaction history for blockchain operations
+model TransactionHistory {
+    id              String   @id @default(cuid())
+    userId          String
+    user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+    artistId        String?
+    artist          Artist?  @relation(fields: [artistId], references: [id], onDelete: SetNull)
+    type            String // 'mint', 'create_collection', 'transfer', 'payment'
+    transactionHash String
+    contractAddress String?
+    tokenId         String?
+    amount          Decimal?
+    currency        String?
+    status          String // 'pending', 'success', 'failed'
+    blockNumber     Int?
+    gasUsed         String?
+    gasFee          Decimal?
+    errorMessage    String?
+    metadata        Json?
+    createdAt       DateTime @default(now())
+    updatedAt       DateTime @updatedAt
+
+    @@index([userId])
+    @@index([artistId])
+    @@index([type])
+    @@index([status])
+    @@index([transactionHash])
+    @@index([createdAt])
+    @@map("transaction_history")
+}
+
+// Subscription analytics for artists
+model SubscriptionAnalytics {
+    id                       String        @id @default(cuid())
+    artistId                 String
+    artist                   Artist        @relation(fields: [artistId], references: [id], onDelete: Cascade)
+    communityId              String
+    community                Community     @relation(fields: [communityId], references: [id], onDelete: Cascade)
+    collectionId             String
+    collection               NFTCollection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+    date                     DateTime      @db.Date
+    newSubscribers           Int           @default(0)
+    renewedSubscriptions     Int           @default(0)
+    expiredSubscriptions     Int           @default(0)
+    cancelledSubscriptions   Int           @default(0)
+    totalActiveSubscriptions Int           @default(0)
+    revenue                  Decimal       @default(0)
+    currency                 String        @default("USDC")
+    createdAt                DateTime      @default(now())
+    updatedAt                DateTime      @updatedAt
+
+    @@unique([artistId, communityId, date])
+    @@index([artistId])
+    @@index([communityId])
+    @@index([date])
+    @@map("subscription_analytics")
+}
+
+// Cron job execution logs
+model CronJobLog {
+    id             String    @id @default(cuid())
+    jobName        String
+    status         String // 'running', 'success', 'failed'
+    startedAt      DateTime  @default(now())
+    completedAt    DateTime?
+    duration       Int? // in milliseconds
+    processedItems Int?      @default(0)
+    errorMessage   String?
+    metadata       Json?
+    createdAt      DateTime  @default(now())
+
+    @@index([jobName])
+    @@index([status])
+    @@index([startedAt])
+    @@map("cron_job_logs")
 }

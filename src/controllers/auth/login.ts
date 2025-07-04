@@ -21,7 +21,20 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 
     // Find user
     const user = await prisma.user.findUnique({
-      where: { email: email.toLowerCase() }
+      where: { email: email.toLowerCase() },
+      select: {
+        id: true,
+        email: true,
+        password: true,
+        name: true,
+        username: true,
+        bio: true,
+        image: true,
+        isVerified: true,
+        emailVerified: true,
+        lastLoginAt: true,
+        authProvider: true
+      }
     });
 
     if (!user) {
@@ -31,6 +44,18 @@ export const login = async (req: Request, res: Response): Promise<void> => {
         userAgent: req.get('User-Agent')
       });
       throw createError('Invalid email or password', 401);
+    }
+
+    // Check if user is registered through OAuth
+    if (user.authProvider && user.authProvider !== 'EMAIL') {
+      logger.warn('Login attempt for OAuth user with password', {
+        userId: user.id,
+        email: user.email,
+        provider: user.authProvider,
+        ip: req.ip,
+        userAgent: req.get('User-Agent')
+      });
+      throw createError(`Please login with ${user.authProvider.toLowerCase()}`, 401);
     }
 
     // Verify password
@@ -53,6 +78,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       username: user.username || undefined,
       isVerified: user.isVerified,
       emailVerified: user.emailVerified
+      
     });
 
     // Update last login

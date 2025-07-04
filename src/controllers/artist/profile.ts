@@ -177,7 +177,17 @@ export const updateArtistProfile = async (req: AuthenticatedRequest, res: Respon
 
     if (genres !== undefined) {
       if (Array.isArray(genres)) {
-        updateData.genres = genres.map(genre => sanitizeInput(genre));
+        updateData.genres = {
+          deleteMany: {},
+          create: genres.map(genreName => ({
+            genre: {
+              connectOrCreate: {
+                where: { name: sanitizeInput(genreName) },
+                create: { name: sanitizeInput(genreName) }
+              }
+            }
+          }))
+        };
       }
     }
 

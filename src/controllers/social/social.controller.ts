@@ -2,10 +2,10 @@ import { Request, Response } from 'express';
 import { logger } from '@/utils/logger';
 import { prisma } from '@/config/database';
 import { AuthenticatedRequest } from '@/middleware/auth';
-import { 
-  FollowRequest, 
-  FollowResponse, 
-  LikeRequest, 
+import {
+  FollowRequest,
+  FollowResponse,
+  LikeRequest,
   LikeResponse,
   CommentRequest,
   CommentResponse,
@@ -706,10 +706,16 @@ export class SocialController {
         include: {
           following: {
             include: {
-              artist: true,
+              artist: {
+                include: {
+                  user: true,
+                  genres: true
+                }
+              },
               _count: {
                 select: { followers: true }
-              }
+              },
+
             }
           }
         },

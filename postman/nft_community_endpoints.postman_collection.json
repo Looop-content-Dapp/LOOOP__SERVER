@@ -1,0 +1,385 @@
+{
+    "info": {
+        "name": "NFT Community Endpoints",
+        "description": "Collection for testing NFT subscription and community endpoints",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "item": [
+        {
+            "name": "Community",
+            "item": [
+                {
+                    "name": "Create Community",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/communities",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "communities"
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"name\": \"Test Community\",\n  \"description\": \"A test community for NFT subscriptions\",\n  \"imageUrl\": \"https://example.com/image.jpg\"\n}"
+                        }
+                    }
+                },
+                {
+                    "name": "Get Community",
+                    "request": {
+                        "method": "GET",
+                        "url": {
+                            "raw": "{{base_url}}/communities/{{community_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "communities",
+                                "{{community_id}}"
+                            ]
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "NFT Subscriptions",
+            "item": [
+                {
+                    "name": "Create NFT Collection",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/nft-subscriptions/collections",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "nft-subscriptions",
+                                "collections"
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"email\": \"artist@example.com\",\n  \"communityId\": \"{{community_id}}\",\n  \"name\": \"Test Collection\",\n  \"symbol\": \"TEST\",\n  \"pricePerMonth\": 10,\n  \"description\": \"Test NFT collection\",\n  \"maxSupply\": 1000,\n  \"imageUrl\": \"https://example.com/nft.jpg\"\n}"
+                        }
+                    }
+                },
+                {
+                    "name": "Mint NFT",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/nft-subscriptions/mint",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "nft-subscriptions",
+                                "mint"
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"userEmail\": \"user@example.com\",\n  \"communityId\": \"{{community_id}}\"\n}"
+                        }
+                    }
+                },
+                {
+                    "name": "Renew Membership",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/nft-subscriptions/renew",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "nft-subscriptions",
+                                "renew"
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"userEmail\": \"user@example.com\",\n  \"membershipId\": \"{{membership_id}}\"\n}"
+                        }
+                    }
+                },
+                {
+                    "name": "Check Access",
+                    "request": {
+                        "method": "GET",
+                        "url": {
+                            "raw": "{{base_url}}/nft-subscriptions/access/{{user_id}}/{{community_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "nft-subscriptions",
+                                "access",
+                                "{{user_id}}",
+                                "{{community_id}}"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Get User Memberships",
+                    "request": {
+                        "method": "GET",
+                        "url": {
+                            "raw": "{{base_url}}/nft-subscriptions/memberships/{{user_id}}?status=active",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "nft-subscriptions",
+                                "memberships",
+                                "{{user_id}}"
+                            ],
+                            "query": [
+                                {
+                                    "key": "status",
+                                    "value": "active"
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Get Transaction History",
+                    "request": {
+                        "method": "GET",
+                        "url": {
+                            "raw": "{{base_url}}/nft-subscriptions/transactions/{{user_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "nft-subscriptions",
+                                "transactions",
+                                "{{user_id}}"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Get Collection Info",
+                    "request": {
+                        "method": "GET",
+                        "url": {
+                            "raw": "{{base_url}}/nft-subscriptions/collections/{{community_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "nft-subscriptions",
+                                "collections",
+                                "{{community_id}"
+                            ]
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Analytics",
+            "item": [
+                {
+                    "name": "Get Earnings Overview",
+                    "request": {
+                        "method": "GET",
+                        "url": {
+                            "raw": "{{base_url}}/nft-subscriptions/analytics/earnings/{{artist_id}}?period=30",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "nft-subscriptions",
+                                "analytics",
+                                "earnings",
+                                "{{artist_id}}"
+                            ],
+                            "query": [
+                                {
+                                    "key": "period",
+                                    "value": "30"
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Get Earnings History",
+                    "request": {
+                        "method": "GET",
+                        "url": {
+                            "raw": "{{base_url}}/nft-subscriptions/analytics/history/{{artist_id}}?period=30",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "nft-subscriptions",
+                                "analytics",
+                                "history",
+                                "{{artist_id}}"
+                            ],
+                            "query": [
+                                {
+                                    "key": "period",
+                                    "value": "30"
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Get Community Analytics",
+                    "request": {
+                        "method": "GET",
+                        "url": {
+                            "raw": "{{base_url}}/nft-subscriptions/analytics/community/{{community_id}}?period=30",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "nft-subscriptions",
+                                "analytics",
+                                "community",
+                                "{{community_id}}"
+                            ],
+                            "query": [
+                                {
+                                    "key": "period",
+                                    "value": "30"
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Get Top Communities",
+                    "request": {
+                        "method": "GET",
+                        "url": {
+                            "raw": "{{base_url}}/nft-subscriptions/analytics/top-communities/{{artist_id}}?limit=5",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "nft-subscriptions",
+                                "analytics",
+                                "top-communities",
+                                "{{artist_id}}"
+                            ],
+                            "query": [
+                                {
+                                    "key": "limit",
+                                    "value": "5"
+                                }
+                            ]
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Cron Jobs",
+            "item": [
+                {
+                    "name": "Trigger Cron Job",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/nft-subscriptions/cron/trigger",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "nft-subscriptions",
+                                "cron",
+                                "trigger"
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"jobName\": \"checkMemberships\"\n}"
+                        }
+                    }
+                },
+                {
+                    "name": "Get Cron Status",
+                    "request": {
+                        "method": "GET",
+                        "url": {
+                            "raw": "{{base_url}}/nft-subscriptions/cron/status",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "nft-subscriptions",
+                                "cron",
+                                "status"
+                            ]
+                        }
+                    }
+                }
+            ]
+        }
+    ],
+    "variable": [
+        {
+            "key": "base_url",
+            "value": "http://localhost:3000/api"
+        },
+        {
+            "key": "user_id",
+            "value": "your-user-id"
+        },
+        {
+            "key": "artist_id",
+            "value": "your-artist-id"
+        },
+        {
+            "key": "community_id",
+            "value": "your-community-id"
+        },
+        {
+            "key": "membership_id",
+            "value": "your-membership-id"
+        }
+    ]
+}

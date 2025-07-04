@@ -192,28 +192,22 @@ export default class StarknetService {
     calldata: { collectibleName: string; communitySymbol: string }
   ): Promise<TransactionResult> {
     const account = await this.getUserWalletInfo(email);
-    console.log("account", account);
-    const account0 = new Account(
-      this.provider,
-      account.address,
-      account.privateKey,
-      undefined,
-      constants.TRANSACTION_VERSION.V3
-    );
     try {
-      const contract = this.getContract(this.Factory, factoryAbi);
-      contract.connect(account0);
-      console.log(`Contract instance created for address ${this.Factory}`);
 
-      const myCall = contract.populate("create_collection", [
-        account.address,
+      // Execute an action
+const calls = [{
+  contractAddress: this.Factory,
+  entrypoint: 'create_collection',
+  calldata: [
+      account.address,
+        calldata.collectibleName, // Short string, should work
+        calldata.communitySymbol, // Short string, should work
         calldata.collectibleName,
-        calldata.communitySymbol,
-        calldata.collectibleName,
-      ]);
+  ]
+}];
 
-      const res = await contract.create_collection(myCall.calldata);
-      console.log(`Transaction for method create_collection executed with hash:`, res);
+      const res =  await executeAction("sepolia", calls, account.address, account.privateKey, process.env.CAVOS_API_SECRET)
+
       const receipt: any = await this.provider.waitForTransaction(res.transaction_hash);
       console.log(`Transaction receipt for method create_collection:`, receipt);
 
@@ -232,7 +226,6 @@ export default class StarknetService {
 
       return {
         transactionHash: res.transaction_hash,
-        receipt,
         eventData,
         mintEvent,
       };
@@ -287,22 +280,18 @@ export default class StarknetService {
    */
   async executeMint(email: string, contractAddress: string): Promise<TransactionResult> {
     const account = await this.getUserWalletInfo(email);
-    console.log("account", account);
-
-    const account0 = new Account(
-      this.provider,
-      account.address,
-      account.privateKey,
-      undefined,
-      constants.TRANSACTION_VERSION.V3
-    );
     try {
-      const contract = this.getContract(contractAddress, nftAbi);
-      contract.connect(account0);
-      console.log(`Contract instance created for address ${contractAddress}`);
+      const calls = [{
+  contractAddress: contractAddress,
+  entrypoint: 'mint_ticket_nft',
+  calldata: [
+     5000000,
+     this.usdcAddress
+  ]
+}];
 
-      const myCall = contract.populate("mint_ticket_nft", [5000000, this.usdcAddress]);
-      const res = await contract.mint_ticket_nft(myCall.calldata);
+      const res =  await executeAction("sepolia", calls, account.address, account.privateKey, process.env.CAVOS_API_SECRET)
+
       console.log(`Transaction for method mint_ticket_nft executed with hash:`, res);
       const receipt: any = await this.provider.waitForTransaction(res.transaction_hash);
       console.log(`Transaction receipt for method mint_pass:`, receipt);
@@ -320,7 +309,6 @@ export default class StarknetService {
 
       return {
         transactionHash: res.transaction_hash,
-        receipt,
         eventData,
         mintEvent,
       };
@@ -357,7 +345,6 @@ export default class StarknetService {
 
       return {
         transactionHash: res.transaction_hash,
-        receipt,
         eventData,
         mintEvent,
       };
@@ -802,3 +789,482 @@ export default class StarknetService {
 }
 
 export const starknetService = new StarknetService();
+
+/**
+ * Enhanced NFT Subscription Service for community access
+ */
+export class NFTSubscriptionService {
+  constructor(private starknetService: StarknetService) {}
+
+  /**
+   * Create an NFT collection for a community
+   * @param email - Artist's email
+   * @param communityId - Community ID
+   * @param collectionData - Collection metadata
+   * @returns Transaction result and collection info
+   */
+  async createCommunityCollection(
+    email: string,
+    communityId: string,
+    collectionData: {
+      name: string;
+      symbol: string;
+      description?: string;
+      pricePerMonth: number;
+      maxSupply?: number;
+      imageUrl?: string;
+    }
+  ): Promise<{
+    transactionResult: TransactionResult;
+    collectionId: string;
+    contractAddress?: string;
+  }> {
+    try {
+      // Get user info
+      const userWallet = await this.starknetService.getUserWalletInfo(email);
+      const user = await prisma.user.findUnique({ where: { email } });
+      if (!user) throw new Error('User not found');
+
+      const artist = await prisma.artist.findUnique({ where: { userId: user.id } });
+      if (!artist) throw new Error('Artist profile not found');
+
+      // Execute the collection creation on blockchain
+      const transactionResult = await this.starknetService.executeCreateCollection(email, {
+        collectibleName: collectionData.name,
+        communitySymbol: collectionData.symbol
+      });
+
+      // Extract contract address from transaction events
+      const contractAddress = transactionResult.eventData|| null;
+      // Create NFT collection record in database
+      const nftCollection = await prisma.nFTCollection.create({
+        data: {
+          name: collectionData.name,
+          symbol: collectionData.symbol,
+          description: collectionData.description,
+          communityId,
+          artistId: artist.id,
+          contractAddress: contractAddress?.toString(),
+          pricePerMonth: collectionData.pricePerMonth,
+          maxSupply: collectionData.maxSupply,
+          imageUrl: collectionData.imageUrl,
+          totalSupply: 0
+        }
+      });
+
+      // Record transaction in history
+      await this.recordTransaction({
+        userId: user.id,
+        artistId: artist.id,
+        type: 'create_collection',
+        transactionHash: transactionResult.transactionHash,
+        contractAddress: contractAddress?.toString(),
+        status: 'success',
+        blockNumber: transactionResult.eventData?.blockNumber,
+        metadata: {
+          collectionId: nftCollection.id,
+          communityId,
+          name: collectionData.name,
+          symbol: collectionData.symbol
+        }
+      });
+
+      return {
+        transactionResult,
+        collectionId: nftCollection.id,
+        contractAddress: contractAddress?.toString()
+      };
+    } catch (error: any) {
+      console.error('Error creating community collection:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Mint NFT for community access
+   * @param userEmail - User's email
+   * @param communityId - Community ID to join
+   * @returns Transaction result and membership info
+   */
+  async mintCommunityAccess(
+    userEmail: string,
+    communityId: string
+  ): Promise<{
+    transactionResult: TransactionResult;
+    membershipId: string;
+    expiresAt: Date;
+  }> {
+    try {
+      // Get user and community info
+      const user = await prisma.user.findUnique({ where: { email: userEmail } });
+      if (!user) throw new Error('User not found');
+
+      const community = await prisma.community.findUnique({
+        where: { id: communityId },
+        include: { nftCollections: { where: { isActive: true } } }
+      });
+      if (!community) throw new Error('Community not found');
+      if (!community.nftCollections.length) throw new Error('No active NFT collection for this community');
+
+      const collection = community.nftCollections[0]; // Use the first active collection
+
+      // Check if user already has active membership
+      const existingMembership = await prisma.nFTMembership.findFirst({
+        where: {
+          userId: user.id,
+          communityId,
+          isActive: true,
+          expiresAt: { gt: new Date() }
+        }
+      });
+
+      if (existingMembership) {
+        throw new Error('User already has active membership for this community');
+      }
+
+      // Execute mint transaction
+      const transactionResult = await this.starknetService.executeMint(
+        userEmail,
+        collection.contractAddress!
+      );
+
+      // Calculate expiration date (1 month from now)
+      const expiresAt = new Date();
+      expiresAt.setMonth(expiresAt.getMonth() + 1);
+
+      // Create membership record
+      const membership = await prisma.nFTMembership.create({
+        data: {
+          userId: user.id,
+          communityId,
+          collectionId: collection.id,
+          tokenId: transactionResult.eventData?.tokenId?.toString() || '',
+          contractAddress: collection.contractAddress!,
+          transactionHash: transactionResult.transactionHash,
+          expiresAt,
+          isActive: true,
+          autoRenew: true
+        }
+      });
+
+      // Add user to community members if not already a member
+      await prisma.communityMember.upsert({
+        where: {
+          userId_communityId: {
+            userId: user.id,
+            communityId
+          }
+        },
+        create: {
+          userId: user.id,
+          communityId,
+          isActive: true
+        },
+        update: {
+          isActive: true
+        }
+      });
+
+      // Record transaction in history
+      await this.recordTransaction({
+        userId: user.id,
+        artistId: community.artistId,
+        type: 'mint',
+        transactionHash: transactionResult.transactionHash,
+        contractAddress: collection.contractAddress,
+        tokenId: membership.tokenId,
+        amount: Number(collection.pricePerMonth),
+        currency: collection.currency,
+        status: 'success',
+        blockNumber: transactionResult.eventData?.blockNumber,
+        metadata: {
+          membershipId: membership.id,
+          communityId,
+          collectionId: collection.id,
+          expiresAt
+        }
+      });
+
+      // Update collection total supply
+      await prisma.nFTCollection.update({
+        where: { id: collection.id },
+        data: { totalSupply: { increment: 1 } }
+      });
+
+      return {
+        transactionResult,
+        membershipId: membership.id,
+        expiresAt
+      };
+    } catch (error: any) {
+      console.error('Error minting community access:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Renew community membership
+   * @param userEmail - User's email
+   * @param membershipId - Membership ID to renew
+   * @returns Transaction result and updated membership
+   */
+  async renewMembership(
+    userEmail: string,
+    membershipId: string
+  ): Promise<{
+    transactionResult: TransactionResult;
+    newExpiresAt: Date;
+  }> {
+    try {
+      const user = await prisma.user.findUnique({ where: { email: userEmail } });
+      if (!user) throw new Error('User not found');
+
+      const membership = await prisma.nFTMembership.findFirst({
+        where: {
+          id: membershipId,
+          userId: user.id
+        },
+        include: {
+          collection: true,
+          community: true
+        }
+      });
+
+      if (!membership) throw new Error('Membership not found');
+
+      // Execute mint transaction for renewal
+      const transactionResult = await this.starknetService.executeMint(
+        userEmail,
+        membership.contractAddress
+      );
+
+      // Extend expiration by 1 month
+      const newExpiresAt = new Date(membership.expiresAt);
+      newExpiresAt.setMonth(newExpiresAt.getMonth() + 1);
+
+      // Update membership
+      await prisma.nFTMembership.update({
+        where: { id: membershipId },
+        data: {
+          expiresAt: newExpiresAt,
+          reminderSent: false,
+          updatedAt: new Date()
+        }
+      });
+
+      // Record transaction
+      await this.recordTransaction({
+        userId: user.id,
+        artistId: membership.community.artistId,
+        type: 'mint',
+        transactionHash: transactionResult.transactionHash,
+        contractAddress: membership.contractAddress,
+        tokenId: transactionResult.eventData?.tokenId?.toString(),
+        amount: Number(membership.collection.pricePerMonth),
+        currency: membership.collection.currency,
+        status: 'success',
+        blockNumber: transactionResult.eventData?.blockNumber,
+        metadata: {
+          membershipId: membership.id,
+          type: 'renewal',
+          communityId: membership.communityId,
+          previousExpiresAt: membership.expiresAt,
+          newExpiresAt
+        }
+      });
+
+      return {
+        transactionResult,
+        newExpiresAt
+      };
+    } catch (error: any) {
+      console.error('Error renewing membership:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Check if user has access to a community
+   * @param userId - User ID
+   * @param communityId - Community ID
+   * @returns Access status and membership info
+   */
+  async checkCommunityAccess(
+    userId: string,
+    communityId: string
+  ): Promise<{
+    hasAccess: boolean;
+    membership?: any;
+    expiresAt?: Date;
+    daysRemaining?: number;
+  }> {
+    try {
+      const membership = await prisma.nFTMembership.findFirst({
+        where: {
+          userId,
+          communityId,
+          isActive: true,
+          expiresAt: { gt: new Date() }
+        },
+        include: {
+          collection: true,
+          community: true
+        }
+      });
+
+      if (!membership) {
+        return { hasAccess: false };
+      }
+
+      const now = new Date();
+      const expiresAt = new Date(membership.expiresAt);
+      const daysRemaining = Math.ceil((expiresAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+
+      return {
+        hasAccess: true,
+        membership,
+        expiresAt,
+        daysRemaining
+      };
+    } catch (error: any) {
+      console.error('Error checking community access:', error);
+      return { hasAccess: false };
+    }
+  }
+
+  /**
+   * Record transaction in history
+   * @param transactionData - Transaction data to record
+   */
+  private async recordTransaction(transactionData: {
+    userId: string;
+    artistId?: string;
+    type: string;
+    transactionHash: string;
+    contractAddress?: string;
+    tokenId?: string;
+    amount?: number;
+    currency?: string;
+    status: string;
+    blockNumber?: number;
+    gasUsed?: string;
+    gasFee?: number;
+    errorMessage?: string;
+    metadata?: any;
+  }): Promise<void> {
+    try {
+      await prisma.transactionHistory.create({
+        data: {
+          userId: transactionData.userId,
+          artistId: transactionData.artistId,
+          type: transactionData.type,
+          transactionHash: transactionData.transactionHash,
+          contractAddress: transactionData.contractAddress,
+          tokenId: transactionData.tokenId,
+          amount: transactionData.amount,
+          currency: transactionData.currency,
+          status: transactionData.status,
+          blockNumber: transactionData.blockNumber,
+          gasUsed: transactionData.gasUsed,
+          gasFee: transactionData.gasFee,
+          errorMessage: transactionData.errorMessage,
+          metadata: transactionData.metadata
+        }
+      });
+    } catch (error: any) {
+      console.error('Error recording transaction:', error);
+      // Don't throw error here to avoid breaking the main transaction flow
+    }
+  }
+
+  /**
+   * Get user's transaction history
+   * @param userId - User ID
+   * @param filters - Filter options
+   * @returns Transaction history
+   */
+  async getUserTransactionHistory(
+    userId: string,
+    filters: {
+      type?: string;
+      status?: string;
+      limit?: number;
+      offset?: number;
+    } = {}
+  ): Promise<any[]> {
+    try {
+      const { type, status, limit = 50, offset = 0 } = filters;
+
+      const transactions = await prisma.transactionHistory.findMany({
+        where: {
+          userId,
+          ...(type && { type }),
+          ...(status && { status })
+        },
+        include: {
+          artist: {
+            select: {
+              name: true,
+              profileImage: true
+            }
+          }
+        },
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        skip: offset
+      });
+
+      return transactions;
+    } catch (error: any) {
+      console.error('Error getting user transaction history:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get artist's transaction history
+   * @param artistId - Artist ID
+   * @param filters - Filter options
+   * @returns Transaction history
+   */
+  async getArtistTransactionHistory(
+    artistId: string,
+    filters: {
+      type?: string;
+      status?: string;
+      limit?: number;
+      offset?: number;
+    } = {}
+  ): Promise<any[]> {
+    try {
+      const { type, status, limit = 50, offset = 0 } = filters;
+
+      const transactions = await prisma.transactionHistory.findMany({
+        where: {
+          artistId,
+          ...(type && { type }),
+          ...(status && { status })
+        },
+        include: {
+          user: {
+            select: {
+              name: true,
+              email: true,
+              image: true
+            }
+          }
+        },
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        skip: offset
+      });
+
+      return transactions;
+    } catch (error: any) {
+      console.error('Error getting artist transaction history:', error);
+      return [];
+    }
+  }
+}
+
+export const nftSubscriptionService = new NFTSubscriptionService(starknetService);

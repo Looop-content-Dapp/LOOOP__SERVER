@@ -13,19 +13,22 @@ export const register = async (req: Request, res: Response): Promise<void> => {
     const { name, email, password, username, referralCode, bio }: RegisterRequest = req.body;
 
     // Validation
-    if (!name || !email || !password) {
-      throw createError('Name, email, and password are required', 400);
+    if (!name || !email) {
+      throw createError('Name and email are required', 400);
     }
 
     if (!validateEmail(email)) {
       throw createError('Invalid email format', 400);
     }
 
-    if (!validatePassword(password)) {
-      throw createError(
-        'Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character',
-        400
-      );
+    // Only validate password for email registration
+    if (password) {
+      if (!validatePassword(password)) {
+        throw createError(
+          'Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character',
+          400
+        );
+      }
     }
 
     // Check if user already exists
@@ -47,8 +50,11 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       }
     }
 
-    // Hash password
-    const hashedPassword = await AuthService.hashPassword(password);
+    // Hash password if provided (for email registration)
+    const hashedPassword = password ? await AuthService.hashPassword(password) : '';
+
+    // Set auth provider
+    const authProvider = password ? 'EMAIL' : undefined;
 
     // Handle referral if provided
     let referrer = null;
@@ -76,7 +82,8 @@ export const register = async (req: Request, res: Response): Promise<void> => {
           password: hashedPassword,
           username: username?.toLowerCase(),
           bio: bio || null,
-          emailVerified: false
+          emailVerified: false,
+          authProvider: 'EMAIL'
         }
       });
 

@@ -9,6 +9,7 @@ import { register } from '@/controllers/auth/register';
 import { getProfile, updateProfile, deleteAccount } from '@/controllers/auth/profile';
 import { changePassword, forgotPassword, resetPassword } from '@/controllers/auth/password';
 import { verifyEmail, resendVerification, checkEmailVerification } from '@/controllers/auth/email';
+import { googleAuth, googleAuthCallback, appleAuth, appleAuthCallback } from '@/controllers/auth/oauth';
 
 const router: Router = Router();
 
@@ -35,11 +36,13 @@ router.get('/me', requireAuth, asyncHandler(getProfile));
 router.patch('/profile', requireAuth, asyncHandler(updateProfile));
 router.delete('/account', requireAuth, asyncHandler(deleteAccount));
 
-// OAuth routes (to be implemented in future)
-// router.get('/google', googleAuth);
-// router.get('/google/callback', googleAuthCallback);
-// router.get('/apple', appleAuth);
-// router.get('/apple/callback', appleAuthCallback);
+// OAuth routes
+
+
+router.get('/google', asyncHandler(googleAuth));
+router.get('/google/callback', asyncHandler(googleAuthCallback));
+router.get('/apple', asyncHandler(appleAuth));
+router.post('/apple/callback', asyncHandler(appleAuthCallback)); // Note: Apple uses POST for callback
 
 // Auth status check (public endpoint)
 router.get('/status', optionalAuth, (req: Request, res: Response) => {
