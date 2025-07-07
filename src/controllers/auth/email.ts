@@ -5,7 +5,74 @@ import { createError } from '@/middleware/errorHandler';
 import { AuthService } from '@/services/auth.service';
 import { AuthenticatedRequest } from '@/middleware/auth';
 import { EmailVerificationRequest } from '@/types/auth.types';
+import { sendEmail } from '@/scripts/sendmail';
 
+// OTP-based email verification
+export const verifyEmailOTP = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { email, otp } = req.body;
+
+    if (!email || !otp) {
+      throw createError('Email and OTP are required', 400);
+    }
+
+    // Verify OTP
+    await AuthService.verifyEmailVerificationOTP(email, otp);
+
+    // Find user if exists
+    const user = await prisma.user.findUnique({
+      where: { email }
+    });
+
+    // Only update user if they exist
+    if (user) {
+      if (user.emailVerified) {
+        res.json({
+          success: true,
+          message: 'Email is already verified'
+        });
+        return;
+      }
+
+      // Update user to mark email as verified
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          emailVerified: true,
+          updatedAt: new Date()
+        }
+      });
+    }
+
+    logger.info('Email verified successfully with OTP', {
+      userId: user?.id || 'no-user',
+      email: email
+    });
+
+    res.json({
+      success: true,
+      message: 'Email verified successfully'
+    });
+
+  } catch (error) {
+    logger.error('Email OTP verification error:', error);
+
+    if (error.statusCode) {
+      res.status(error.statusCode).json({
+        success: false,
+        error: { message: error.message }
+      });
+      return;
+    }
+
+    res.status(500).json({
+      success: false,
+      error: { message: 'Internal server error' }
+    });
+  }
+};
+
+// Legacy token-based email verification (kept for backward compatibility)
 export const verifyEmail = async (req: Request, res: Response): Promise<void> => {
   try {
     const { token }: EmailVerificationRequest = req.body;
@@ -38,7 +105,7 @@ export const verifyEmail = async (req: Request, res: Response): Promise<void> =>
     await prisma.$transaction(async (tx) => {
       await tx.user.update({
         where: { id: user.id },
-        data: { 
+        data: {
           emailVerified: true,
           updatedAt: new Date()
         }
@@ -53,9 +120,9 @@ export const verifyEmail = async (req: Request, res: Response): Promise<void> =>
       });
     });
 
-    logger.info('Email verified successfully', { 
-      userId: user.id, 
-      email: user.email 
+    logger.info('Email verified successfully', {
+      userId: user.id,
+      email: user.email
     });
 
     res.json({
@@ -81,50 +148,90 @@ export const verifyEmail = async (req: Request, res: Response): Promise<void> =>
   }
 };
 
-export const resendVerification = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+// Send OTP for email verification
+export const sendVerificationOTP = async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = req.user?.id;
+    const { email } = req.body;
 
-    if (!userId) {
-      throw createError('User not found', 404);
+    if (!email) {
+      throw createError('Email is required', 400);
     }
 
-    // Find user
-    const user = await prisma.user.findUnique({
-      where: { id: userId }
+    // Generate new OTP
+    const otp = await AuthService.generateEmailVerificationOTP(email);
+
+    // Send verification email with OTP
+    const emailResult = await sendEmail({
+      to: email,
+      subject: 'Verify Your Email - Looop Music',
+      template: 'verify',
+      context: {
+        email: email,
+        otp: otp
+      }
     });
 
-    if (!user) {
-      throw createError('User not found', 404);
+    if (!emailResult) {
+      throw createError('Failed to send verification email', 500);
     }
 
-    if (user.emailVerified) {
-      res.json({
-        success: true,
-        message: 'Email is already verified'
-      });
-      return;
-    }
-
-    // Remove any existing verification tokens for this user
-    await prisma.verification.deleteMany({
-      where: { identifier: user.email }
-    });
-
-    // Generate new verification token
-    const verificationToken = await AuthService.generateEmailVerificationToken(user.email);
-
-    // TODO: Send verification email
-    // await emailService.sendVerificationEmail(user.email, verificationToken);
-
-    logger.info('Email verification resent', { 
-      userId: user.id, 
-      email: user.email 
+    logger.info('Email verification OTP sent', {
+      email: email
     });
 
     res.json({
       success: true,
-      message: 'Verification email sent successfully'
+      message: 'Verification OTP sent successfully'
+    });
+
+  } catch (error) {
+    logger.error('Send verification OTP error:', error);
+
+    if (error.statusCode) {
+      res.status(error.statusCode).json({
+        success: false,
+        error: { message: error.message }
+      });
+      return;
+    }
+
+    res.status(500).json({
+      success: false,
+      error: { message: 'Internal server error' }
+    });
+  }
+};
+
+// Legacy resend verification (kept for backward compatibility)
+export const resendVerification = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+   const {email} = req.body;
+
+    // Generate new OTP instead of token
+    const otp = await AuthService.generateEmailVerificationOTP(email);
+
+    // Send verification email with OTP
+    const emailResult = await sendEmail({
+      to: email,
+      subject: 'Verify Your Email - Looop Music',
+      template: 'verify',
+      context: {
+        email: email,
+        otp: otp
+      }
+    });
+
+    if (!emailResult) {
+      throw createError('Failed to send verification email', 500);
+    }
+
+    logger.info('Email verification OTP resent', {
+      email: email
+    });
+
+    res.json({
+      success: true,
+      message: 'Verification OTP sent successfully'
     });
 
   } catch (error) {

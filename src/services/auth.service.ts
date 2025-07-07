@@ -98,7 +98,65 @@ export class AuthService {
   }
 
   /**
-   * Generate email verification token
+   * Generate email verification OTP
+   */
+  public static async generateEmailVerificationOTP(email: string): Promise<string> {
+    // Generate 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+    // Remove any existing OTP for this email
+    await prisma.verification.deleteMany({
+      where: {
+        identifier: email,
+        value: { startsWith: 'OTP_' }
+      }
+    });
+
+    // Store OTP with prefix to distinguish from other tokens
+    await prisma.verification.create({
+      data: {
+        identifier: email,
+        value: `OTP_${otp}`,
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000) // 10 minutes
+      }
+    });
+
+    return otp;
+  }
+
+  /**
+   * Verify email verification OTP
+   */
+  public static async verifyEmailVerificationOTP(email: string, otp: string): Promise<boolean> {
+    try {
+      const verification = await prisma.verification.findFirst({
+        where: {
+          identifier: email,
+          value: `OTP_${otp}`,
+          expiresAt: { gt: new Date() }
+        }
+      });
+
+      if (!verification) {
+        throw createError('Invalid or expired OTP', 401);
+      }
+
+      // Remove used OTP
+      await prisma.verification.delete({
+        where: {
+          id: verification.id
+        }
+      });
+
+      return true;
+    } catch (error) {
+      logger.error('Email verification OTP verification failed:', error);
+      throw createError('Invalid or expired OTP', 401);
+    }
+  }
+
+  /**
+   * Generate email verification token (legacy - kept for backward compatibility)
    */
   public static async generateEmailVerificationToken(email: string): Promise<string> {
     const token = jwt.sign({ email }, this.JWT_SECRET, { expiresIn: '24h' });
@@ -115,7 +173,7 @@ export class AuthService {
   }
 
   /**
-   * Verify email verification token
+   * Verify email verification token (legacy - kept for backward compatibility)
    */
   public static async verifyEmailVerificationToken(token: string): Promise<string> {
     try {

@@ -8,7 +8,7 @@ import { login, logout } from '@/controllers/auth/login';
 import { register } from '@/controllers/auth/register';
 import { getProfile, updateProfile, deleteAccount } from '@/controllers/auth/profile';
 import { changePassword, forgotPassword, resetPassword } from '@/controllers/auth/password';
-import { verifyEmail, resendVerification, checkEmailVerification } from '@/controllers/auth/email';
+import { verifyEmail, verifyEmailOTP, resendVerification, sendVerificationOTP, checkEmailVerification } from '@/controllers/auth/email';
 import { googleAuth, googleAuthCallback, appleAuth, appleAuthCallback } from '@/controllers/auth/oauth';
 
 const router: Router = Router();
@@ -26,9 +26,13 @@ router.post('/forgot-password', asyncHandler(forgotPassword));
 router.post('/reset-password', asyncHandler(resetPassword));
 router.post('/change-password', requireAuth, asyncHandler(changePassword));
 
-// Email verification routes
+// Email verification routes (OTP-based)
+router.post('/send-verification-otp', asyncHandler(sendVerificationOTP));
+router.post('/verify-email-otp', asyncHandler(verifyEmailOTP));
+
+// Legacy email verification routes (token-based, kept for backward compatibility)
 router.post('/verify-email', asyncHandler(verifyEmail));
-router.post('/resend-verification', requireAuth, asyncHandler(resendVerification));
+router.post('/resend-verification', asyncHandler(resendVerification));
 router.get('/email-verification-status', requireAuth, asyncHandler(checkEmailVerification));
 
 // Profile management routes
@@ -70,6 +74,8 @@ router.get('/health', (_req: Request, res: Response) => {
         'POST /logout',
         'POST /forgot-password',
         'POST /reset-password',
+        'POST /send-verification-otp',
+        'POST /verify-email-otp',
         'POST /verify-email',
         'GET /status',
         'GET /health'

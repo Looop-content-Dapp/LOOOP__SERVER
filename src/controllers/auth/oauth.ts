@@ -6,6 +6,7 @@ import { AuthService } from '@/services/auth.service';
 import { createError } from '@/middleware/errorHandler';
 import { logger } from '@/utils/logger';
 import { prisma } from '@/config/database';
+import crypto from "crypto";
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID!;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET!;
@@ -124,9 +125,11 @@ export const appleAuthCallback = async (req: Request, res: Response) => {
       emailVerified: true
     });
 
-    res.redirect(`com.looop.app:/oauth2redirect/apple?token=${token}`);
+    res.redirect(`com.looop.Looop:/oauth2redirect/apple?token=${token}`);
   } catch (error) {
     logger.error('Apple auth callback error:', error);
     res.redirect('com.looop.app:/oauth2redirect/apple?error=true');
   }
 };
+
+

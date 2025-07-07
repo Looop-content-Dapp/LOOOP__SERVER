@@ -1,17 +1,6 @@
-# LOOOP Authentication API Documentation
+# LOOOP Authentication API Documentation for React Native Expo
 
-This document describes the comprehensive JWT-based authentication system that replaces Better Auth.
-
-## Overview
-
-The authentication system provides:
-- User registration and login with JWT tokens
-- Email verification
-- Password reset functionality  
-- Profile management
-- Account deletion
-- Secure password hashing with bcrypt
-- Rate limiting for security
+This document provides implementation details for integrating LOOOP's authentication system in your React Native Expo application.
 
 ## Base URL
 ```
@@ -21,454 +10,490 @@ http://localhost:5000/api/v1/auth
 ## Authentication
 
 Most endpoints require a Bearer token in the Authorization header:
-```
-Authorization: Bearer <jwt_token>
+```javascript
+const headers = {
+  'Authorization': `Bearer ${token}`,
+  'Content-Type': 'application/json'
+};
 ```
 
 ## Response Format
 
-All responses follow this format:
-```json
-{
-  "success": boolean,
-  "message": string,
-  "data": object | null,
-  "error": {
-    "message": string
-  } | null
+All API responses follow this format:
+```typescript
+interface ApiResponse<T> {
+  success: boolean;
+  message: string;
+  data: T | null;
+  error?: {
+    message: string;
+  };
 }
 ```
 
-## Endpoints
+## Implementation Guide
 
-### Public Endpoints (No Authentication Required)
+### 1. Email Registration
 
-#### POST `/register`
-Register a new user account.
-
-**Request Body:**
-```json
-{
-  "name": "John Doe",
-  "email": "john@example.com", 
-  "password": "SecurePass123!",
-  "username": "johndoe", // optional
-  "bio": "Music lover", // optional
-  "referralCode": "REF123" // optional
-}
+```typescript
+const register = async (userData: {
+  name: string;
+  email: string;
+  password: string;
+  username?: string;
+  bio?: string;
+  referralCode?: string;
+}) => {
+  try {
+    const response = await fetch('${BASE_URL}/register', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(userData)
+    });
+    
+    const data = await response.json();
+    if (!data.success) throw new Error(data.error.message);
+    
+    return data;
+  } catch (error) {
+    throw error;
+  }
+};
 ```
 
-**Response (201):**
+### 2. Email Login
+
+```typescript
+const login = async (credentials: {
+  email: string;
+  password: string;
+  rememberMe?: boolean;
+}) => {
+  try {
+    const response = await fetch('${BASE_URL}/login', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(credentials)
+    });
+    
+    const data = await response.json();
+    if (!data.success) throw new Error(data.error.message);
+    
+    return data;
+  } catch (error) {
+    throw error;
+  }
+};
+```
+
+### 3. Google OAuth Authentication
+
+```typescript
+import * as WebBrowser from 'expo-web-browser';
+import * as Linking from 'expo-linking';
+
+const googleAuth = async () => {
+  try {
+    // Register your URL scheme in app.json
+    // "scheme": "com.looop.app"
+    
+    // Handle deep linking
+    Linking.addEventListener('url', handleGoogleRedirect);
+    
+    // Open Google auth URL
+    const result = await WebBrowser.openAuthSessionAsync(
+      '${BASE_URL}/google',
+      'com.looop.app:/oauth2redirect/google'
+    );
+    
+    return result;
+  } catch (error) {
+    throw error;
+  }
+};
+
+const handleGoogleRedirect = (event: { url: string }) => {
+  const { url } = event;
+  const token = url.split('token=')[1];
+  if (token) {
+    // Store token and update auth state
+  }
+};
+```
+
+### 4. Apple OAuth Authentication
+
+```typescript
+import * as AppleAuthentication from 'expo-apple-authentication';
+
+const appleAuth = async () => {
+  try {
+    // Register your URL scheme in app.json
+    // "scheme": "com.looop.app"
+    
+    // Handle deep linking
+    Linking.addEventListener('url', handleAppleRedirect);
+    
+    // Open Apple auth URL
+    const result = await WebBrowser.openAuthSessionAsync(
+      '${BASE_URL}/apple',
+      'com.looop.app:/oauth2redirect/apple'
+    );
+    
+    return result;
+  } catch (error) {
+    throw error;
+  }
+};
+
+const handleAppleRedirect = (event: { url: string }) => {
+  const { url } = event;
+  const token = url.split('token=')[1];
+  if (token) {
+    // Store token and update auth state
+  }
+};
+```
+
+### 5. Email Verification (OTP)
+
+```typescript
+// Request OTP
+const sendVerificationOTP = async (email: string) => {
+  try {
+    const response = await fetch('${BASE_URL}/send-verification-otp', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ email })
+    });
+    
+    const data = await response.json();
+    if (!data.success) throw new Error(data.error.message);
+    
+    return data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+// Verify OTP
+const verifyEmailOTP = async (email: string, otp: string) => {
+  try {
+    const response = await fetch('${BASE_URL}/verify-email-otp', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ email, otp })
+    });
+    
+    const data = await response.json();
+    if (!data.success) throw new Error(data.error.message);
+    
+    return data;
+  } catch (error) {
+    throw error;
+  }
+};
+```
+
+### 6. Password Management
+
+```typescript
+// Request password reset
+const forgotPassword = async (email: string) => {
+  try {
+    const response = await fetch('${BASE_URL}/forgot-password', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ email })
+    });
+    
+    const data = await response.json();
+    if (!data.success) throw new Error(data.error.message);
+    
+    return data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+// Reset password with token
+const resetPassword = async (token: string, newPassword: string) => {
+  try {
+    const response = await fetch('${BASE_URL}/reset-password', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ token, newPassword })
+    });
+    
+    const data = await response.json();
+    if (!data.success) throw new Error(data.error.message);
+    
+    return data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+// Change password (authenticated)
+const changePassword = async (currentPassword: string, newPassword: string, token: string) => {
+  try {
+    const response = await fetch('${BASE_URL}/change-password', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ currentPassword, newPassword })
+    });
+    
+    const data = await response.json();
+    if (!data.success) throw new Error(data.error.message);
+    
+    return data;
+  } catch (error) {
+    throw error;
+  }
+};
+```
+
+### 7. Profile Management
+
+```typescript
+// Get user profile
+const getProfile = async (token: string) => {
+  try {
+    const response = await fetch('${BASE_URL}/me', {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    const data = await response.json();
+    if (!data.success) throw new Error(data.error.message);
+    
+    return data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+// Update profile
+const updateProfile = async (token: string, updates: {
+  name?: string;
+  username?: string;
+  bio?: string;
+  image?: string;
+}) => {
+  try {
+    const response = await fetch('${BASE_URL}/profile', {
+      method: 'PATCH',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(updates)
+    });
+    
+    const data = await response.json();
+    if (!data.success) throw new Error(data.error.message);
+    
+    return data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+// Delete account
+const deleteAccount = async (token: string, password: string) => {
+  try {
+    const response = await fetch('${BASE_URL}/account', {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ password })
+    });
+    
+    const data = await response.json();
+    if (!data.success) throw new Error(data.error.message);
+    
+    return data;
+  } catch (error) {
+    throw error;
+  }
+};
+```
+
+## Setup Requirements
+
+1. Install required dependencies:
+```bash
+npx expo install expo-web-browser expo-auth-session expo-random expo-apple-authentication @react-native-async-storage/async-storage
+```
+
+2. Configure app.json:
 ```json
 {
-  "success": true,
-  "message": "User registered successfully. Please check your email for verification.",
-  "data": {
-    "user": {
-      "id": "clx...",
-      "email": "john@example.com",
-      "name": "John Doe",
-      "username": "johndoe",
-      "bio": "Music lover",
-      "image": null,
-      "isVerified": false,
-      "emailVerified": false
+  "expo": {
+    "scheme": "com.looop.app",
+    "ios": {
+      "bundleIdentifier": "com.looop.app"
     },
-    "token": "eyJhbGciOiJIUzI1NiIs...",
-    "tokenType": "Bearer",
-    "expiresIn": 2592000
-  }
-}
-```
-
-#### POST `/login`
-Authenticate user and get access token.
-
-**Request Body:**
-```json
-{
-  "email": "john@example.com",
-  "password": "SecurePass123!",
-  "rememberMe": true // optional
-}
-```
-
-**Response (200):**
-```json
-{
-  "success": true,
-  "message": "Login successful",
-  "data": {
-    "user": {
-      "id": "clx...",
-      "email": "john@example.com",
-      "name": "John Doe",
-      "username": "johndoe",
-      "bio": "Music lover",
-      "image": null,
-      "isVerified": false,
-      "emailVerified": true,
-      "lastLoginAt": "2025-07-01T19:05:48.000Z"
-    },
-    "token": "eyJhbGciOiJIUzI1NiIs...",
-    "tokenType": "Bearer",
-    "expiresIn": 2592000
-  }
-}
-```
-
-#### POST `/logout`
-Logout user (client-side token removal).
-
-**Response (200):**
-```json
-{
-  "success": true,
-  "message": "Successfully logged out"
-}
-```
-
-#### POST `/forgot-password`
-Request password reset link.
-
-**Request Body:**
-```json
-{
-  "email": "john@example.com"
-}
-```
-
-**Response (200):**
-```json
-{
-  "success": true,
-  "message": "If an account with that email exists, we have sent a password reset link"
-}
-```
-
-#### POST `/reset-password`
-Reset password using token from email.
-
-**Request Body:**
-```json
-{
-  "token": "eyJhbGciOiJIUzI1NiIs...",
-  "newPassword": "NewSecurePass123!"
-}
-```
-
-**Response (200):**
-```json
-{
-  "success": true,
-  "message": "Password reset successful"
-}
-```
-
-#### POST `/verify-email`
-Verify email address using token from email.
-
-**Request Body:**
-```json
-{
-  "token": "eyJhbGciOiJIUzI1NiIs..."
-}
-```
-
-**Response (200):**
-```json
-{
-  "success": true,
-  "message": "Email verified successfully"
-}
-```
-
-#### GET `/status`
-Check authentication status (works with or without token).
-
-**Response (200):**
-```json
-{
-  "success": true,
-  "message": "Authenticated", // or "Not authenticated"
-  "data": {
-    "authenticated": true,
-    "user": {
-      "id": "clx...",
-      "email": "john@example.com",
-      "name": "John Doe"
-    } // or null if not authenticated
-  }
-}
-```
-
-#### GET `/health`
-Health check for auth service.
-
-**Response (200):**
-```json
-{
-  "success": true,
-  "message": "Auth routes are operational",
-  "timestamp": "2025-07-01T19:05:48.000Z",
-  "endpoints": {
-    "public": [...],
-    "protected": [...]
-  }
-}
-```
-
-### Protected Endpoints (Authentication Required)
-
-#### GET `/me`
-Get current user profile.
-
-**Response (200):**
-```json
-{
-  "success": true,
-  "message": "Profile retrieved successfully",
-  "data": {
-    "user": {
-      "id": "clx...",
-      "name": "John Doe",
-      "email": "john@example.com",
-      "username": "johndoe",
-      "bio": "Music lover",
-      "image": null,
-      "isVerified": false,
-      "emailVerified": true,
-      "lastLoginAt": "2025-07-01T19:05:48.000Z",
-      "createdAt": "2025-07-01T10:00:00.000Z",
-      "updatedAt": "2025-07-01T19:05:48.000Z",
-      "artist": {
-        "id": "clx...",
-        "name": "John Artist",
-        "verified": true,
-        "monthlyListeners": 1000,
-        "followers": 250
-      }, // or null
-      "wallet": {
-        "address": "0x123...",
-        "publickey": "0x456..."
-      } // or null
+    "android": {
+      "package": "com.looop.app"
     }
   }
 }
 ```
 
-#### PATCH `/profile`
-Update user profile.
-
-**Request Body:**
-```json
-{
-  "name": "John Smith", // optional
-  "username": "johnsmith", // optional
-  "bio": "Updated bio", // optional
-  "image": "https://example.com/avatar.jpg" // optional
-}
+3. Set up environment variables:
+```typescript
+// config.ts
+export const BASE_URL = 'http://localhost:5000/api/v1/auth';
 ```
 
-**Response (200):**
-```json
-{
-  "success": true,
-  "message": "Profile updated successfully",
-  "data": {
-    "user": {
-      "id": "clx...",
-      "name": "John Smith",
-      "email": "john@example.com",
-      "username": "johnsmith",
-      "bio": "Updated bio",
-      "image": "https://example.com/avatar.jpg",
-      "isVerified": false,
-      "emailVerified": true,
-      "updatedAt": "2025-07-01T19:05:48.000Z"
-    }
+## Security Best Practices
+
+1. Token Storage:
+```typescript
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+// Store token securely
+const storeToken = async (token: string) => {
+  try {
+    await AsyncStorage.setItem('@auth_token', token);
+  } catch (error) {
+    console.error('Error storing token:', error);
+  }
+};
+
+// Retrieve token
+const getToken = async () => {
+  try {
+    return await AsyncStorage.getItem('@auth_token');
+  } catch (error) {
+    console.error('Error retrieving token:', error);
+    return null;
+  }
+};
+
+// Remove token on logout
+const removeToken = async () => {
+  try {
+    await AsyncStorage.removeItem('@auth_token');
+  } catch (error) {
+    console.error('Error removing token:', error);
+  }
+};
+```
+
+2. Input Validation:
+```typescript
+const validateEmail = (email: string): boolean => {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email);
+};
+
+const validatePassword = (password: string): boolean => {
+  // At least 8 characters, 1 uppercase, 1 lowercase, 1 number, 1 special char
+  const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+  return passwordRegex.test(password);
+};
+```
+
+## Error Handling
+
+Implement a consistent error handling approach:
+
+```typescript
+interface ApiError {
+  message: string;
+  code?: number;
+}
+
+class AuthError extends Error {
+  code?: number;
+  
+  constructor(message: string, code?: number) {
+    super(message);
+    this.name = 'AuthError';
+    this.code = code;
   }
 }
-```
 
-#### POST `/change-password`
-Change user password.
-
-**Request Body:**
-```json
-{
-  "currentPassword": "SecurePass123!",
-  "newPassword": "NewSecurePass123!"
-}
-```
-
-**Response (200):**
-```json
-{
-  "success": true,
-  "message": "Password changed successfully"
-}
-```
-
-#### POST `/resend-verification`
-Resend email verification.
-
-**Response (200):**
-```json
-{
-  "success": true,
-  "message": "Verification email sent successfully"
-}
-```
-
-#### GET `/email-verification-status`
-Check email verification status.
-
-**Response (200):**
-```json
-{
-  "success": true,
-  "message": "Email verification status retrieved",
-  "data": {
-    "emailVerified": true,
-    "email": "john@example.com"
+const handleApiError = (error: any): ApiError => {
+  if (error instanceof AuthError) {
+    return {
+      message: error.message,
+      code: error.code
+    };
   }
-}
+  
+  return {
+    message: 'An unexpected error occurred',
+    code: 500
+  };
+};
 ```
 
-#### DELETE `/account`
-Delete user account permanently.
+## Rate Limiting
 
-**Request Body:**
-```json
-{
-  "password": "SecurePass123!"
-}
-```
-
-**Response (200):**
-```json
-{
-  "success": true,
-  "message": "Account deleted successfully"
-}
-```
-
-## Error Responses
-
-### 400 Bad Request
-```json
-{
-  "success": false,
-  "error": {
-    "message": "Email and password are required"
-  }
-}
-```
-
-### 401 Unauthorized
-```json
-{
-  "success": false,
-  "error": {
-    "message": "Invalid authentication"
-  }
-}
-```
-
-### 404 Not Found
-```json
-{
-  "success": false,
-  "error": {
-    "message": "User not found"
-  }
-}
-```
-
-### 409 Conflict
-```json
-{
-  "success": false,
-  "error": {
-    "message": "Email or username already exists"
-  }
-}
-```
-
-### 429 Too Many Requests
-```json
-{
-  "success": false,
-  "error": {
-    "message": "Too many requests, please try again later"
-  }
-}
-```
-
-### 500 Internal Server Error
-```json
-{
-  "success": false,
-  "error": {
-    "message": "Internal server error"
-  }
-}
-```
-
-## Security Features
-
-### Password Requirements
-- Minimum 8 characters
-- At least one uppercase letter
-- At least one lowercase letter  
-- At least one number
-- At least one special character
-
-### Rate Limiting
-- Authentication endpoints are rate limited
+The API implements rate limiting:
 - 100 requests per 15-minute window per IP
 - Additional protection on login attempts
 
-### JWT Tokens
-- 30-day expiration by default
-- Includes user ID, email, name, username, verification status
-- Signed with strong secret key
+Implement exponential backoff in your client:
 
-### Password Security
-- Bcrypt hashing with 12 salt rounds
-- Secure password reset with time-limited tokens
-- Current password verification for sensitive operations
-
-## Future OAuth Implementation
-
-The system is designed to easily add OAuth providers:
-
-```javascript
-// Coming soon:
-// GET /auth/google
-// GET /auth/google/callback  
-// GET /auth/github
-// GET /auth/github/callback
+```typescript
+const backoff = async (retries: number, fn: () => Promise<any>) => {
+  try {
+    return await fn();
+  } catch (error) {
+    if (error.code === 429 && retries > 0) {
+      const delay = Math.pow(2, 5 - retries) * 1000;
+      await new Promise(resolve => setTimeout(resolve, delay));
+      return backoff(retries - 1, fn);
+    }
+    throw error;
+  }
+};
 ```
 
-## Migration from Better Auth
+## JWT Token Management
 
-This custom JWT system replaces Better Auth with:
-- ✅ Simplified architecture
-- ✅ Full control over authentication flow
-- ✅ Better integration with existing codebase
-- ✅ Comprehensive API endpoints
-- ✅ Enhanced security features
-- ✅ Proper error handling
-- ✅ Rate limiting
-- ✅ Transaction safety
+The JWT token expires in 30 days. Implement token refresh logic:
 
-## Environment Variables
+```typescript
+const checkTokenExpiration = (token: string): boolean => {
+  try {
+    const [, payload] = token.split('.');
+    const { exp } = JSON.parse(atob(payload));
+    return Date.now() >= exp * 1000;
+  } catch {
+    return true;
+  }
+};
 
-Required environment variables:
-```env
-JWT_SECRET=your-super-secret-jwt-key-here-min-32-chars-long-and-secure
-JWT_EXPIRES_IN=30d
-DATABASE_URL=postgresql://username:password@localhost:5432/looop_db
+const refreshTokenIfNeeded = async (token: string) => {
+  if (checkTokenExpiration(token)) {
+    // Implement token refresh logic
+    // For now, require re-login
+    await removeToken();
+    // Redirect to login
+  }
+};
 ```

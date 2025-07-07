@@ -17,7 +17,8 @@
         "db:migrate": "prisma migrate dev",
         "db:studio": "prisma studio",
         "db:format": "prisma format",
-        "admin:bootstrap": "ts-node -r tsconfig-paths/register src/scripts/bootstrap-admin.ts"
+        "admin:bootstrap": "ts-node -r tsconfig-paths/register src/scripts/bootstrap-admin.ts",
+        "test:email": "ts-node -r tsconfig-paths/register src/scripts/test-email.ts"
     },
     "dependencies": {
         "@prisma/client": "^6.10.1",
@@ -36,6 +37,7 @@
         "express-session": "^1.18.1",
         "express-validator": "^7.2.1",
         "google-auth-library": "^9.15.1",
+        "handlebars": "^4.7.8",
         "helmet": "^8.1.0",
         "jsonwebtoken": "^9.0.2",
         "morgan": "^1.10.0",
