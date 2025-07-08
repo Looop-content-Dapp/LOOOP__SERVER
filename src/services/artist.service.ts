@@ -4,13 +4,14 @@ import { createError } from '@/middleware/errorHandler';
 import {
   ArtistClaimRequest,
   ArtistClaimResponse,
-  ArtistClaimFull,
   ArtistSearchResult,
   ClaimStatus,
-  ClaimStatistics,
+  ArtistClaimFull,
   ArtistClaimSearchFilters,
-  AdminClaimAction
+  AdminClaimAction,
+  CreatorFormData
 } from '@/types/artist-claim.types';
+import EmailService from './email.service';
 
 interface Genre { id: string; artistId: string; genreId: string; }
 
@@ -69,24 +70,91 @@ export class ArtistService {
   /**
    * Search for artists (Step 3 in Spotify flow: Search & Select Your Artist Profile)
    */
-  public static async searchArtistsForClaim(query: string, limit = 20): Promise<ArtistSearchResult[]> {
+  public static async searchArtistsForClaim(query?: string, limit = 20): Promise<ArtistSearchResult[]> {
     try {
+      // If no query provided, return empty results or most popular artists
+      if (!query || query.trim() === '') {
+        const artists = await prisma.artist.findMany({
+          where: {
+            isActive: true,
+            verified: true
+          },
+          select: {
+            id: true,
+            name: true,
+            profileImage: true,
+            verified: true,
+            followers: true,
+            monthlyListeners: true,
+            socialLinks: true,
+            claimedAt: true,
+            createdAt: true,
+            tracks: {
+              select: {
+                id: true,
+                title: true,
+                createdAt: true,
+                artworkUrl: true
+              },
+              orderBy: { createdAt: 'desc' },
+              take: 3
+            }
+          },
+          orderBy: [
+            { verified: 'desc' },
+            { monthlyListeners: 'desc' },
+            { followers: 'desc' }
+          ],
+          take: Math.min(limit, 10) // Return fewer results for empty query
+        });
+
+        return artists.map(artist => ({
+          id: artist.id,
+          name: artist.name,
+          profileImage: artist.profileImage || undefined,
+          followers: artist.followers,
+          monthlyListeners: artist.monthlyListeners,
+          verified: artist.verified,
+          recentReleases: artist.tracks.map(track => ({
+            id: track.id,
+            title: track.title,
+            releaseDate: track.createdAt.toISOString(),
+            artworkUrl: track.artworkUrl || undefined
+          })),
+          socialLinks: artist.socialLinks as any,
+          isClaimed: !!artist.claimedAt,
+          claimedAt: artist.claimedAt?.toISOString()
+        }));
+      }
+
+      // Clean the query
+      const cleanQuery = query.trim();
+
+      // Build search conditions that filter out undefined values
+      const searchConditions: any[] = [
+        { name: { contains: cleanQuery, mode: 'insensitive' } },
+        {
+          genres: {
+            some: {
+              genre: {
+                name: { contains: cleanQuery, mode: 'insensitive' }
+              }
+            }
+          }
+        }
+      ];
+
+      // Only add labels search if query is meaningful for labels
+      if (cleanQuery.length > 2) {
+        searchConditions.push({ labels: { hasSome: [cleanQuery] } });
+      }
+
       const artists = await prisma.artist.findMany({
         where: {
           AND: [
             { isActive: true },
             {
-              OR: [
-                { name: { contains: query, mode: 'insensitive' } },
-                { genres: {
-            some: {
-              genre: {
-                name: { contains: query, mode: 'insensitive' }
-              }
-            }
-          }},
-          { labels: { hasSome: [query] } }
-              ]
+              OR: searchConditions
             }
           ]
         },
@@ -142,6 +210,52 @@ export class ArtistService {
     } catch (error) {
       logger.error('Error searching artists for claims:', error);
       throw createError('Failed to search artists', 500);
+    }
+  }
+
+  /**
+   * Transform CreatorFormData to ArtistClaimRequest
+   */
+  private static transformCreatorFormData(creatorData: any): ArtistClaimRequest {
+    return {
+      artistName: creatorData.artistName,
+      role: creatorData.role,
+      connectionDetails: `Role: ${creatorData.role}`,
+      fullName: creatorData.connectionDetails.fullName,
+      email: creatorData.connectionDetails.email,
+      phone: creatorData.connectionDetails.phone,
+      websiteUrl: creatorData.websiteUrl,
+      socialLinks: creatorData.socialLinks,
+      distributorInfo: creatorData.distributorInfo.provider !== 'none' ? {
+        provider: creatorData.distributorInfo.provider,
+        accountEmail: creatorData.distributorInfo.accountEmail,
+        verificationToken: creatorData.distributorInfo.verificationToken,
+        isVerified: creatorData.distributorInfo.isVerified || false,
+        releaseIds: []
+      } : undefined,
+      evidenceUrls: [], // Will be populated later if needed
+      additionalInfo: creatorData.additionalInfo,
+      agreesToTerms: creatorData.agreements.termsAgreed,
+      agreesToPrivacy: creatorData.agreements.privacyAgreed
+    };
+  }
+
+  /**
+   * Submit artist claim using CreatorFormData format
+   */
+  public static async submitCreatorClaim(
+    userId: string,
+    creatorData: CreatorFormData
+  ): Promise<ArtistClaimResponse> {
+    try {
+      // Transform CreatorFormData to ArtistClaimRequest
+      const claimData = this.transformCreatorFormData(creatorData);
+
+      // Use existing submission logic
+      return await this.submitArtistClaim(userId, claimData);
+    } catch (error) {
+      logger.error('Error submitting creator claim:', error);
+      throw error;
     }
   }
 
@@ -211,7 +325,7 @@ export class ArtistService {
 
       // Determine submission type
       const submissionType = claimData.distributorInfo?.isVerified ? 'distributor_verified' : 'manual';
-      const initialStatus = submissionType === 'distributor_verified' ? 'under_review' : 'pending';
+      const initialStatus = 'under_review'; // Always start with under_review for immediate processing
 
       // Create comprehensive claim
       const claim = await prisma.artistClaim.create({
@@ -238,8 +352,8 @@ export class ArtistService {
 
       const estimatedReviewTime = submissionType === 'distributor_verified' ? '1-2 business days' : '1-3 business days';
       const message = submissionType === 'distributor_verified'
-        ? 'Your claim has been submitted with distributor verification. Our team will review it shortly.'
-        : 'Your artist claim has been submitted successfully. Our team will review your request and get back to you soon.';
+        ? 'Your claim has been submitted with distributor verification and is now under review. Our team will review it shortly.'
+        : 'Your artist claim has been submitted successfully and is now under review. Our team will review your request and get back to you soon.';
 
       const response: ArtistClaimResponse = {
         id: claim.id,
@@ -252,11 +366,23 @@ export class ArtistService {
         trackingNumber
       };
 
-      // TODO: Send confirmation email
-      // await this.sendClaimConfirmationEmail(claim);
+      // Send confirmation email to user
+      try {
+        await EmailService.sendClaimConfirmationEmail(claim);
+        logger.info('Confirmation email sent successfully', { claimId: claim.id });
+      } catch (emailError) {
+        logger.error('Failed to send confirmation email:', emailError);
+        // Don't fail the claim submission if email fails
+      }
 
-      // TODO: Notify admin team
-      // await this.notifyAdminTeam(claim);
+      // Notify admin team
+      try {
+        await EmailService.notifyAdminTeam(claim);
+        logger.info('Admin notification sent successfully', { claimId: claim.id });
+      } catch (emailError) {
+        logger.error('Failed to send admin notification:', emailError);
+        // Don't fail the claim submission if email fails
+      }
 
       logger.info('Artist claim submitted successfully', {
         userId,
@@ -492,16 +618,20 @@ export class ArtistService {
         return 'approved';
       }
 
+      if (statuses.includes('under_review')) {
+        return 'under_review';
+      }
+
       if (statuses.includes('rejected')) {
         return 'rejected';
       }
 
-      if (statuses.includes('pending')) {
-        return 'pending';
-      }
-
       if (statuses.includes('info_required')) {
         return 'info_required';
+      }
+
+      if (statuses.includes('pending')) {
+        return 'pending';
       }
 
       return 'pending';
@@ -530,11 +660,11 @@ export class ArtistService {
       }
 
       // Check if there's already a pending claim for this artist
-      const existingClaim = await prisma.artistClaim.findFirst({
+        const existingClaim = await prisma.artistClaim.findFirst({
         where: {
           userId,
           artistId: claimData.artistId,
-          status: 'pending'
+          status: { in: ['pending', 'under_review', 'info_required'] }
         }
       });
 
@@ -572,7 +702,7 @@ export class ArtistService {
           fullName: 'Unknown', // Default value
           email: claimData.email,
           evidenceUrls: claimData.evidenceUrl ? [claimData.evidenceUrl] : [],
-          status: 'pending',
+          status: 'under_review',
           submissionType: 'manual',
           submittedAt: new Date()
         },
@@ -628,8 +758,8 @@ export class ArtistService {
         throw createError('Claim not found', 404);
       }
 
-      if (claim.status !== 'pending') {
-        throw createError('Claim is not pending', 400);
+      if (!['pending', 'under_review', 'info_required'].includes(claim.status)) {
+        throw createError('Claim is not in a reviewable state', 400);
       }
 
       let artistId: string;
@@ -727,6 +857,64 @@ export class ArtistService {
       // Get the artist profile (either updated existing or newly created)
       const approvedArtist = await this.getArtistProfile(artistId);
 
+      // Send approval notification email
+      try {
+        const updatedClaim = await prisma.artistClaim.findUnique({
+          where: { id: claimId },
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                image: true
+              }
+            }
+          }
+        });
+
+        if (updatedClaim) {
+          const claimData: ArtistClaimFull = {
+            id: updatedClaim.id,
+            userId: updatedClaim.userId,
+            user: updatedClaim.user,
+            artistId: updatedClaim.artistId || undefined,
+            artistName: updatedClaim.artistName,
+            role: updatedClaim.role as any,
+            fullName: updatedClaim.fullName,
+            email: updatedClaim.email,
+            phone: updatedClaim.phone || undefined,
+            companyName: updatedClaim.companyName || undefined,
+            officialEmail: updatedClaim.officialEmail || undefined,
+            websiteUrl: updatedClaim.websiteUrl || undefined,
+            socialLinks: updatedClaim.socialLinks as any,
+            distributorInfo: updatedClaim.distributorInfo as any,
+            connectionDetails: updatedClaim.connectionDetails || undefined,
+            evidenceUrls: updatedClaim.evidenceUrls,
+            status: updatedClaim.status as ClaimStatus,
+            submissionType: updatedClaim.submissionType as any,
+            reviewNotes: updatedClaim.reviewNotes || undefined,
+            rejectionReason: updatedClaim.rejectionReason || undefined,
+            adminUserId: updatedClaim.adminUserId || undefined,
+            submittedAt: updatedClaim.submittedAt.toISOString(),
+            reviewedAt: updatedClaim.reviewedAt?.toISOString(),
+            approvedAt: updatedClaim.approvedAt?.toISOString(),
+            createdAt: updatedClaim.createdAt.toISOString(),
+            updatedAt: updatedClaim.updatedAt.toISOString(),
+            trackingNumber: `AC-${updatedClaim.submittedAt.getTime()}-${updatedClaim.id.slice(-9).toUpperCase()}`,
+            estimatedReviewTime: 'Completed',
+            canResubmit: false,
+            daysInReview: Math.floor((new Date().getTime() - updatedClaim.submittedAt.getTime()) / (1000 * 60 * 60 * 24))
+          };
+
+          await EmailService.sendClaimStatusUpdate(claimData, 'approved');
+          logger.info('Approval notification email sent', { claimId });
+        }
+      } catch (emailError) {
+        logger.error('Failed to send approval notification email:', emailError);
+        // Don't fail the approval if email fails
+      }
+
       logger.info('Artist claim approved successfully', {
         claimId,
         userId: claim.userId,
@@ -758,17 +946,76 @@ export class ArtistService {
         throw createError('Claim not found', 404);
       }
 
-      if (claim.status !== 'pending') {
-        throw createError('Claim is not pending', 400);
+      if (!['pending', 'under_review', 'info_required'].includes(claim.status)) {
+        throw createError('Claim is not in a reviewable state', 400);
       }
 
       await prisma.artistClaim.update({
         where: { id: claimId },
         data: {
           status: 'rejected',
-          // You could add a rejection reason field to the schema
+          rejectionReason: reason,
+          reviewedAt: new Date()
         }
       });
+
+      // Send rejection notification email
+      try {
+        const updatedClaim = await prisma.artistClaim.findUnique({
+          where: { id: claimId },
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                image: true
+              }
+            }
+          }
+        });
+
+        if (updatedClaim) {
+          const claimData: ArtistClaimFull = {
+            id: updatedClaim.id,
+            userId: updatedClaim.userId,
+            user: updatedClaim.user,
+            artistId: updatedClaim.artistId || undefined,
+            artistName: updatedClaim.artistName,
+            role: updatedClaim.role as any,
+            fullName: updatedClaim.fullName,
+            email: updatedClaim.email,
+            phone: updatedClaim.phone || undefined,
+            companyName: updatedClaim.companyName || undefined,
+            officialEmail: updatedClaim.officialEmail || undefined,
+            websiteUrl: updatedClaim.websiteUrl || undefined,
+            socialLinks: updatedClaim.socialLinks as any,
+            distributorInfo: updatedClaim.distributorInfo as any,
+            connectionDetails: updatedClaim.connectionDetails || undefined,
+            evidenceUrls: updatedClaim.evidenceUrls,
+            status: updatedClaim.status as ClaimStatus,
+            submissionType: updatedClaim.submissionType as any,
+            reviewNotes: updatedClaim.reviewNotes || undefined,
+            rejectionReason: updatedClaim.rejectionReason || undefined,
+            adminUserId: updatedClaim.adminUserId || undefined,
+            submittedAt: updatedClaim.submittedAt.toISOString(),
+            reviewedAt: updatedClaim.reviewedAt?.toISOString(),
+            approvedAt: updatedClaim.approvedAt?.toISOString(),
+            createdAt: updatedClaim.createdAt.toISOString(),
+            updatedAt: updatedClaim.updatedAt.toISOString(),
+            trackingNumber: `AC-${updatedClaim.submittedAt.getTime()}-${updatedClaim.id.slice(-9).toUpperCase()}`,
+            estimatedReviewTime: 'N/A',
+            canResubmit: true,
+            daysInReview: Math.floor((new Date().getTime() - updatedClaim.submittedAt.getTime()) / (1000 * 60 * 60 * 24))
+          };
+
+          await EmailService.sendClaimStatusUpdate(claimData, 'rejected', reason);
+          logger.info('Rejection notification email sent', { claimId });
+        }
+      } catch (emailError) {
+        logger.error('Failed to send rejection notification email:', emailError);
+        // Don't fail the rejection if email fails
+      }
 
       logger.info('Artist claim rejected', {
         claimId,
@@ -780,6 +1027,225 @@ export class ArtistService {
         throw error;
       }
       throw createError('Failed to reject artist claim', 500);
+    }
+  }
+
+  /**
+   * Update claim status with email notifications (comprehensive admin function)
+   */
+  public static async updateClaimStatus(
+    claimId: string,
+    newStatus: ClaimStatus,
+    adminUserId?: string,
+    reviewNotes?: string,
+    rejectionReason?: string
+  ): Promise<ArtistClaimFull> {
+    try {
+      const claim = await prisma.artistClaim.findUnique({
+        where: { id: claimId },
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              image: true
+            }
+          }
+        }
+      });
+
+      if (!claim) {
+        throw createError('Claim not found', 404);
+      }
+
+      // Update claim with new status
+      const updateData: any = {
+        status: newStatus,
+        reviewedAt: new Date(),
+        reviewNotes,
+        adminUserId
+      };
+
+      if (newStatus === 'rejected' && rejectionReason) {
+        updateData.rejectionReason = rejectionReason;
+      }
+
+      if (newStatus === 'approved') {
+        updateData.approvedAt = new Date();
+      }
+
+      const updatedClaim = await prisma.artistClaim.update({
+        where: { id: claimId },
+        data: updateData,
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              image: true
+            }
+          }
+        }
+      });
+
+      // Prepare claim data for email notification
+      const claimData: ArtistClaimFull = {
+        id: updatedClaim.id,
+        userId: updatedClaim.userId,
+        user: updatedClaim.user,
+        artistId: updatedClaim.artistId || undefined,
+        artistName: updatedClaim.artistName,
+        role: updatedClaim.role as any,
+        fullName: updatedClaim.fullName,
+        email: updatedClaim.email,
+        phone: updatedClaim.phone || undefined,
+        companyName: updatedClaim.companyName || undefined,
+        officialEmail: updatedClaim.officialEmail || undefined,
+        websiteUrl: updatedClaim.websiteUrl || undefined,
+        socialLinks: updatedClaim.socialLinks as any,
+        distributorInfo: updatedClaim.distributorInfo as any,
+        connectionDetails: updatedClaim.connectionDetails || undefined,
+        evidenceUrls: updatedClaim.evidenceUrls,
+        status: updatedClaim.status as ClaimStatus,
+        submissionType: updatedClaim.submissionType as any,
+        reviewNotes: updatedClaim.reviewNotes || undefined,
+        rejectionReason: updatedClaim.rejectionReason || undefined,
+        adminUserId: updatedClaim.adminUserId || undefined,
+        submittedAt: updatedClaim.submittedAt.toISOString(),
+        reviewedAt: updatedClaim.reviewedAt?.toISOString(),
+        approvedAt: updatedClaim.approvedAt?.toISOString(),
+        createdAt: updatedClaim.createdAt.toISOString(),
+        updatedAt: updatedClaim.updatedAt.toISOString(),
+        trackingNumber: `AC-${updatedClaim.submittedAt.getTime()}-${updatedClaim.id.slice(-9).toUpperCase()}`,
+        estimatedReviewTime: newStatus === 'approved' || newStatus === 'rejected' ? 'Completed' : '1-3 business days',
+        canResubmit: newStatus === 'rejected' || newStatus === 'info_required',
+        daysInReview: Math.floor((new Date().getTime() - updatedClaim.submittedAt.getTime()) / (1000 * 60 * 60 * 24))
+      };
+
+      // Send status update email notification
+      try {
+        await EmailService.sendClaimStatusUpdate(claimData, newStatus, reviewNotes || rejectionReason);
+        logger.info('Status update notification email sent', {
+          claimId,
+          newStatus,
+          email: updatedClaim.email
+        });
+      } catch (emailError) {
+        logger.error('Failed to send status update notification email:', emailError);
+        // Don't fail the status update if email fails
+      }
+
+      logger.info('Claim status updated successfully', {
+        claimId,
+        oldStatus: claim.status,
+        newStatus,
+        adminUserId,
+        artistName: updatedClaim.artistName
+      });
+
+      return claimData;
+    } catch (error) {
+      logger.error('Error updating claim status:', error);
+      if (error.statusCode) {
+        throw error;
+      }
+      throw createError('Failed to update claim status', 500);
+    }
+  }
+
+  /**
+   * Get pending claims for admin dashboard
+   */
+  public static async getPendingClaims(): Promise<ArtistClaimFull[]> {
+    try {
+      const claims = await prisma.artistClaim.findMany({
+        where: {
+          status: { in: ['pending', 'under_review', 'info_required'] }
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              image: true
+            }
+          },
+          artist: {
+            select: {
+              id: true,
+              name: true,
+              profileImage: true,
+              verified: true,
+              followers: true,
+              monthlyListeners: true,
+              socialLinks: true
+            }
+          }
+        },
+        orderBy: [
+          { submissionType: 'desc' }, // distributor_verified first
+          { submittedAt: 'asc' } // oldest first
+        ]
+      });
+
+      const formattedClaims: ArtistClaimFull[] = claims.map(claim => {
+        const daysInReview = Math.floor(
+          (new Date().getTime() - claim.submittedAt.getTime()) / (1000 * 60 * 60 * 24)
+        );
+
+        return {
+          id: claim.id,
+          userId: claim.userId,
+          user: claim.user,
+          artistId: claim.artistId || undefined,
+          artist: claim.artist ? {
+            id: claim.artist.id,
+            name: claim.artist.name,
+            profileImage: claim.artist.profileImage || undefined,
+            followers: claim.artist.followers,
+            monthlyListeners: claim.artist.monthlyListeners,
+            verified: claim.artist.verified,
+            socialLinks: claim.artist.socialLinks as any,
+            isClaimed: true,
+            claimedAt: undefined
+          } : undefined,
+          artistName: claim.artistName,
+          role: claim.role as any,
+          fullName: claim.fullName,
+          email: claim.email,
+          phone: claim.phone || undefined,
+          companyName: claim.companyName || undefined,
+          officialEmail: claim.officialEmail || undefined,
+          websiteUrl: claim.websiteUrl || undefined,
+          socialLinks: claim.socialLinks as any,
+          distributorInfo: claim.distributorInfo as any,
+          connectionDetails: claim.connectionDetails || undefined,
+          evidenceUrls: claim.evidenceUrls,
+          status: claim.status as ClaimStatus,
+          submissionType: claim.submissionType as any,
+          reviewNotes: claim.reviewNotes || undefined,
+          rejectionReason: claim.rejectionReason || undefined,
+          adminUserId: claim.adminUserId || undefined,
+          submittedAt: claim.submittedAt.toISOString(),
+          reviewedAt: claim.reviewedAt?.toISOString(),
+          approvedAt: claim.approvedAt?.toISOString(),
+          createdAt: claim.createdAt.toISOString(),
+          updatedAt: claim.updatedAt.toISOString(),
+          trackingNumber: `AC-${claim.submittedAt.getTime()}-${claim.id.slice(-9).toUpperCase()}`,
+          estimatedReviewTime: claim.submissionType === 'distributor_verified' ? '1-2 business days' : '1-3 business days',
+          canResubmit: false,
+          daysInReview
+        };
+      });
+
+      logger.info('Pending claims retrieved for admin', { count: formattedClaims.length });
+      return formattedClaims;
+    } catch (error) {
+      logger.error('Error retrieving pending claims:', error);
+      throw createError('Failed to retrieve pending claims', 500);
     }
   }
 
@@ -944,41 +1410,6 @@ export class ArtistService {
     }
   }
 
-  /**
-   * Get all pending claims (admin function)
-   */
-  public static async getPendingClaims() {
-    try {
-      const claims = await prisma.artistClaim.findMany({
-        where: { status: 'pending' },
-        include: {
-          user: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              image: true
-            }
-          },
-          artist: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              profileImage: true
-            }
-          }
-        },
-        orderBy: { createdAt: 'desc' }
-      });
-
-      logger.info('Pending claims retrieved', { count: claims.length });
-      return claims;
-    } catch (error) {
-      logger.error('Error retrieving pending claims:', error);
-      throw createError('Failed to retrieve pending claims', 500);
-    }
-  }
 
   /**
    * Update daily analytics

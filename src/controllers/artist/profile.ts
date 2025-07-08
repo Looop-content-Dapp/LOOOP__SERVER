@@ -4,6 +4,7 @@ import { createError } from '@/middleware/errorHandler';
 import { validateUrl, sanitizeInput } from '@/utils/validation';
 import { AuthenticatedRequest } from '@/middleware/auth';
 import { ArtistService } from '@/services/artist.service';
+import { deleteArtistProfile } from '@/middleware/upload';
 
 /**
  * Get artist profile by ID
@@ -263,6 +264,164 @@ export const searchArtists = async (req: Request, res: Response): Promise<void> 
 
   } catch (error) {
     logger.error('Error searching artists:', error);
+
+    if (error.statusCode) {
+      res.status(error.statusCode).json({
+        success: false,
+        error: { message: error.message }
+      });
+      return;
+    }
+
+    res.status(500).json({
+      success: false,
+      error: { message: 'Internal server error' }
+    });
+  }
+};
+
+/**
+ * Upload artist profile image
+ */
+export const uploadArtistProfileImage = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?.id;
+
+    if (!userId) {
+      throw createError('User not authenticated', 401);
+    }
+
+    if (!req.uploadResult) {
+      throw createError('No file uploaded', 400);
+    }
+
+    // Get user's artist profile
+    const artist = await ArtistService.getArtistByUserId(userId);
+
+    if (!artist) {
+      throw createError('Artist profile not found. You must have an approved artist claim to upload a profile image.', 404);
+    }
+
+    const { secure_url, public_id } = req.uploadResult;
+
+    // If artist has an existing profile image, delete it from Cloudinary
+    if (artist.profileImage) {
+      try {
+        // Extract public_id from existing image URL
+        const urlParts = artist.profileImage.split('/');
+        const fileWithExtension = urlParts[urlParts.length - 1];
+        const existingPublicId = `artist-profiles/${fileWithExtension.split('.')[0]}`;
+        await deleteArtistProfile(existingPublicId);
+      } catch (deleteError) {
+        logger.warn('Failed to delete existing profile image from Cloudinary', {
+          userId,
+          artistId: artist.id,
+          existingImage: artist.profileImage,
+          error: deleteError
+        });
+      }
+    }
+
+    // Update artist with new profile image
+    const updatedArtist = await ArtistService.updateArtistProfile(artist.id, {
+      profileImage: secure_url
+    });
+
+    logger.info('Artist profile image uploaded successfully', {
+      userId,
+      artistId: artist.id,
+      imageUrl: secure_url,
+      publicId: public_id
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Profile image uploaded successfully',
+      data: {
+        artist: updatedArtist,
+        upload: {
+          url: secure_url,
+          publicId: public_id
+        }
+      }
+    });
+
+  } catch (error) {
+    logger.error('Error uploading artist profile image:', error);
+
+    if (error.statusCode) {
+      res.status(error.statusCode).json({
+        success: false,
+        error: { message: error.message }
+      });
+      return;
+    }
+
+    res.status(500).json({
+      success: false,
+      error: { message: 'Internal server error' }
+    });
+  }
+};
+
+/**
+ * Remove artist profile image
+ */
+export const removeArtistProfileImage = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?.id;
+
+    if (!userId) {
+      throw createError('User not authenticated', 401);
+    }
+
+    // Get user's artist profile
+    const artist = await ArtistService.getArtistByUserId(userId);
+
+    if (!artist) {
+      throw createError('Artist profile not found', 404);
+    }
+
+    if (!artist.profileImage) {
+      throw createError('No profile image to remove', 400);
+    }
+
+    // Extract public_id from image URL and delete from Cloudinary
+    try {
+      const urlParts = artist.profileImage.split('/');
+      const fileWithExtension = urlParts[urlParts.length - 1];
+      const publicId = `artist-profiles/${fileWithExtension.split('.')[0]}`;
+
+      const deleteSuccess = await deleteArtistProfile(publicId);
+      if (!deleteSuccess) {
+        logger.warn('Failed to delete profile image from Cloudinary', { 
+          userId, 
+          artistId: artist.id, 
+          publicId 
+        });
+      }
+    } catch (deleteError) {
+      logger.error('Error deleting profile image from Cloudinary:', deleteError);
+    }
+
+    // Update artist to remove profile image
+    const updatedArtist = await ArtistService.updateArtistProfile(artist.id, {
+      profileImage: null
+    });
+
+    logger.info('Artist profile image removed successfully', { 
+      userId, 
+      artistId: artist.id 
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Profile image removed successfully',
+      data: { artist: updatedArtist }
+    });
+
+  } catch (error) {
+    logger.error('Error removing artist profile image:', error);
 
     if (error.statusCode) {
       res.status(error.statusCode).json({

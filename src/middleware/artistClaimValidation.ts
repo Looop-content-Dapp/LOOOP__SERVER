@@ -139,13 +139,15 @@ export const validateArtistClaimSubmission = [
 
   body('distributorInfo.provider')
     .optional()
-    .isIn(['distrokid', 'tunecore', 'awal', 'cd_baby', 'unitedmasters', 'ditto', 'amuse', 'other'])
+    .isIn(['distrokid', 'tunecore', 'awal', 'cd_baby', 'unitedmasters', 'ditto', 'amuse', 'other', 'none'])
     .withMessage('Valid distributor provider is required'),
 
   body('distributorInfo.accountEmail')
-    .optional()
+    .if((value, { req }) => req.body.distributorInfo?.provider && req.body.distributorInfo.provider !== 'none')
+    .notEmpty()
     .isEmail()
-    .withMessage('Valid distributor account email is required'),
+    .withMessage('Valid distributor account email is required')
+    .optional(),
 
   body('distributorInfo.isVerified')
     .optional()

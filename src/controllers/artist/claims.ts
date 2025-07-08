@@ -11,13 +11,14 @@ import {
   ArtistClaimRequest,
   ArtistClaimResponse,
   ArtistSearchResult,
-  ClaimStatusUpdate
+  ClaimStatusUpdate,
+  CreatorFormData
 } from '@/types/artist-claim.types';
 
 /**
- * Enhanced Submit Artist Claim
+ * Submit Creator Claim (New Format)
  */
-export const submitArtistClaim = async (
+export const submitCreatorClaim = async (
   req: AuthenticatedRequest,
   res: Response
 ): Promise<void> => {
@@ -28,15 +29,27 @@ export const submitArtistClaim = async (
       throw createError('User not authenticated', 401);
     }
 
-    const claimData: ArtistClaimRequest = req.body;
+    const creatorData: CreatorFormData = req.body;
 
-    // Validate claim data
-    if (!claimData.agreesToTerms || !claimData.agreesToPrivacy) {
+    // Validate required fields
+    if (!creatorData.artistName) {
+      throw createError('Artist name is required', 400);
+    }
+
+    if (!creatorData.connectionDetails.fullName || !creatorData.connectionDetails.email) {
+      throw createError('Full name and email are required', 400);
+    }
+
+    if (!validateEmail(creatorData.connectionDetails.email)) {
+      throw createError('Invalid email format', 400);
+    }
+
+    if (!creatorData.agreements.termsAgreed || !creatorData.agreements.privacyAgreed) {
       throw createError('You must agree to the terms and privacy policy', 400);
     }
 
-    // Submit artist claim
-    const response: ArtistClaimResponse = await ArtistService.submitArtistClaim(userId, claimData);
+    // Submit creator claim
+    const response: ArtistClaimResponse = await ArtistService.submitCreatorClaim(userId, creatorData);
 
     res.status(201).json({
       success: true,
@@ -45,7 +58,7 @@ export const submitArtistClaim = async (
     });
 
   } catch (error) {
-    logger.error('Error submitting artist claim:', error);
+    logger.error('Error submitting creator claim:', error);
 
     if (error.statusCode) {
       res.status(error.statusCode).json({
@@ -70,8 +83,19 @@ export const searchArtistsForClaim = async (
   res: Response
 ): Promise<void> => {
   try {
-    const query = req.query.q as string;
-    const results: ArtistSearchResult[] = await ArtistService.searchArtistsForClaim(query);
+    const query = req.query.q as string | undefined;
+    const limit = parseInt(req.query.limit as string) || 20;
+
+    // Validate limit
+    if (limit < 1 || limit > 50) {
+      res.status(400).json({
+        success: false,
+        error: { message: 'Limit must be between 1 and 50' }
+      });
+      return;
+    }
+
+    const results: ArtistSearchResult[] = await ArtistService.searchArtistsForClaim(query, limit);
 
     res.status(200).json({
       success: true,
