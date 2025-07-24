@@ -99,36 +99,34 @@ export const getUserStats = async (req: AuthenticatedRequest, res: Response): Pr
       throw createError('User not authenticated', 401);
     }
 
-    // Get comprehensive user statistics
-    const [user, stats] = await Promise.all([
-      prisma.user.findUnique({
-        where: { id: userId },
-        select: { createdAt: true }
-      }),
-      prisma.user.findUnique({
-        where: { id: userId },
-        select: {
-          _count: {
-            select: {
-              tracks: true,
-              playlists: true,
-              likes: true,
-              comments: true,
-              followers: true,
-              following: true,
-              playHistory: true
-            }
-          }
-        }
-      })
-    ]);
+    // Get user basic info
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { createdAt: true }
+    });
 
-    if (!user || !stats) {
+    if (!user) {
       throw createError('User not found', 404);
     }
 
-    // Calculate additional stats
-    const [recentActivity, totalPlayTime] = await Promise.all([
+    // Calculate all stats manually
+    const [
+      totalTracks,
+      totalPlaylists,
+      totalLikes,
+      totalComments,
+      totalFollowers,
+      totalFollowing,
+      recentActivity,
+      totalPlayTime,
+      totalPlays
+    ] = await Promise.all([
+      prisma.track.count({ where: { userId } }),
+      prisma.playlist.count({ where: { userId } }),
+      prisma.like.count({ where: { userId } }),
+      prisma.comment.count({ where: { userId } }),
+      prisma.follow.count({ where: { followingId: userId } }),
+      prisma.follow.count({ where: { followerId: userId } }),
       prisma.playHistory.count({
         where: {
           userId,
@@ -140,23 +138,24 @@ export const getUserStats = async (req: AuthenticatedRequest, res: Response): Pr
       prisma.playHistory.aggregate({
         where: { userId },
         _sum: { duration: true }
-      })
+      }),
+      prisma.playHistory.count({ where: { userId } })
     ]);
 
     const userStats = {
       profile: {
         memberSince: user.createdAt,
-        totalTracks: stats._count.tracks,
-        totalPlaylists: stats._count.playlists,
-        totalLikes: stats._count.likes,
-        totalComments: stats._count.comments
+        totalTracks,
+        totalPlaylists,
+        totalLikes,
+        totalComments
       },
       social: {
-        followers: stats._count.followers,
-        following: stats._count.following
+        followers: totalFollowers,
+        following: totalFollowing
       },
       activity: {
-        totalPlays: stats._count.playHistory,
+        totalPlays,
         recentPlays: recentActivity,
         totalPlayTime: totalPlayTime._sum.duration || 0
       }

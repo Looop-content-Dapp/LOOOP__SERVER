@@ -36,6 +36,14 @@ export class SocialController {
         return;
       }
 
+      if (!followingId) {
+        res.status(400).json({
+          success: false,
+          error: { message: 'followingId is required' }
+        });
+        return;
+      }
+
       if (userId === followingId) {
         res.status(400).json({
           success: false,
@@ -44,18 +52,28 @@ export class SocialController {
         return;
       }
 
-      // Check if user exists
-      const userToFollow = await prisma.user.findUnique({
-        where: { id: followingId },
-        include: {
-          artist: true
-        }
+      // Check if followingId is an artist (only artists can be followed)
+      const artistToFollow = await prisma.artist.findUnique({
+        where: { id: followingId }
       });
 
-      if (!userToFollow) {
+      if (!artistToFollow) {
         res.status(404).json({
           success: false,
-          error: { message: 'User not found' }
+          error: { message: 'Artist not found' }
+        });
+        return;
+      }
+
+      // Check if user is trying to follow their own artist profile
+      const userArtist = await prisma.artist.findUnique({
+        where: { userId: userId }
+      });
+
+      if (userArtist && userArtist.id === followingId) {
+        res.status(400).json({
+          success: false,
+          error: { message: 'Cannot follow your own artist profile' }
         });
         return;
       }
@@ -84,13 +102,11 @@ export class SocialController {
           }
         });
 
-        // Update follower count
-        if (userToFollow.artist) {
-          await prisma.artist.update({
-            where: { id: userToFollow.artist.id },
-            data: { followers: { decrement: 1 } }
-          });
-        }
+        // Update follower count for the artist
+        await prisma.artist.update({
+          where: { id: artistToFollow.id },
+          data: { followers: { decrement: 1 } }
+        });
 
         isFollowing = false;
         message = 'Successfully unfollowed';
@@ -103,13 +119,11 @@ export class SocialController {
           }
         });
 
-        // Update follower count
-        if (userToFollow.artist) {
-          await prisma.artist.update({
-            where: { id: userToFollow.artist.id },
-            data: { followers: { increment: 1 } }
-          });
-        }
+        // Update follower count for the artist
+        await prisma.artist.update({
+          where: { id: artistToFollow.id },
+          data: { followers: { increment: 1 } }
+        });
 
         isFollowing = true;
         message = 'Successfully followed';
@@ -438,251 +452,6 @@ export class SocialController {
   }
 
   /**
-   * Get User Feed (Recent posts from followed users/artists)
-   */
-  static async getUserFeed(req: AuthenticatedRequest, res: Response): Promise<void> {
-    try {
-      const userId = req.user?.id;
-      const { page = 1, limit = 20, type = 'all' } = req.query as UserFeedParams;
-
-      if (!userId) {
-        res.status(401).json({
-          success: false,
-          error: { message: 'Authentication required' }
-        });
-        return;
-      }
-
-      const skip = (Number(page) - 1) * Number(limit);
-      const take = Number(limit);
-
-      // Get users/artists the current user follows
-      const followedUsers = await prisma.follow.findMany({
-        where: { followerId: userId },
-        select: { followingId: true }
-      });
-
-      const followedUserIds = followedUsers.map(f => f.followingId);
-
-      if (followedUserIds.length === 0) {
-        res.status(200).json({
-          success: true,
-          data: {
-            items: [],
-            pagination: {
-              page: Number(page),
-              limit: Number(limit),
-              total: 0,
-              pages: 0
-            }
-          }
-        });
-        return;
-      }
-
-      let feedItems: UserFeedItem[] = [];
-
-      // Get community posts from followed users
-      if (type === 'all' || type === 'community_posts') {
-        const communityPosts = await prisma.post.findMany({
-          where: {
-            userId: { in: followedUserIds },
-            communityId: { not: null }
-          },
-          include: {
-            user: {
-              include: {
-                artist: true
-              }
-            },
-            community: true,
-            _count: {
-              select: {
-                comments: true
-              }
-            }
-          },
-          orderBy: { createdAt: 'desc' },
-          take: Math.floor(take / 3)
-        });
-
-        const communityPostItems: UserFeedItem[] = communityPosts.map(post => ({
-          id: `community_post_${post.id}`,
-          type: 'community_post',
-          timestamp: post.createdAt.toISOString(),
-          author: {
-            id: post.user.id,
-            name: post.user.name,
-            username: post.user.username,
-            profileImage: post.user.image,
-            isVerified: post.user.isVerified,
-            isFollowing: true
-          },
-          content: {
-            text: post.content,
-            imageUrl: post.imageUrl,
-            community: post.community ? {
-              id: post.community.id,
-              name: post.community.name,
-              imageUrl: post.community.imageUrl
-            } : undefined
-          },
-          engagement: {
-            likeCount: post.likeCount,
-            commentCount: post._count.comments,
-            isLiked: false // Would need to check if current user liked
-          },
-          community: post.community ? {
-            id: post.community.id,
-            name: post.community.name,
-            imageUrl: post.community.imageUrl
-          } : undefined
-        }));
-
-        feedItems = [...feedItems, ...communityPostItems];
-      }
-
-      // Get new tracks from followed artists
-      if (type === 'all' || type === 'music_updates') {
-        const newTracks = await prisma.track.findMany({
-          where: {
-            artist: {
-              userId: { in: followedUserIds }
-            },
-            isPublic: true,
-            createdAt: {
-              gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) // Last 30 days
-            }
-          },
-          include: {
-            artist: {
-              include: {
-                user: true
-              }
-            },
-            album: true
-          },
-          orderBy: { createdAt: 'desc' },
-          take: Math.floor(take / 3)
-        });
-
-        const newTrackItems: UserFeedItem[] = newTracks.map(track => ({
-          id: `new_track_${track.id}`,
-          type: 'new_track',
-          timestamp: track.createdAt.toISOString(),
-          author: {
-            id: track.artist.user.id,
-            name: track.artist.user.name,
-            username: track.artist.user.username,
-            profileImage: track.artist.user.image,
-            isVerified: track.artist.user.isVerified,
-            isFollowing: true
-          },
-          content: {
-            text: `Released a new track: ${track.title}`,
-            track: {
-              id: track.id,
-              title: track.title,
-              artworkUrl: track.artworkUrl,
-              duration: track.duration
-            }
-          },
-          engagement: {
-            likeCount: track.likeCount,
-            commentCount: 0, // Would need to count comments on tracks
-            isLiked: false
-          }
-        }));
-
-        feedItems = [...feedItems, ...newTrackItems];
-      }
-
-      // Get new albums from followed artists
-      if (type === 'all' || type === 'music_updates') {
-        const newAlbums = await prisma.album.findMany({
-          where: {
-            artist: {
-              userId: { in: followedUserIds }
-            },
-            isPublic: true,
-            createdAt: {
-              gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) // Last 30 days
-            }
-          },
-          include: {
-            artist: {
-              include: {
-                user: true
-              }
-            },
-            _count: {
-              select: { tracks: true }
-            }
-          },
-          orderBy: { createdAt: 'desc' },
-          take: Math.floor(take / 4)
-        });
-
-        const newAlbumItems: UserFeedItem[] = newAlbums.map(album => ({
-          id: `new_album_${album.id}`,
-          type: 'new_album',
-          timestamp: album.createdAt.toISOString(),
-          author: {
-            id: album.artist.user.id,
-            name: album.artist.user.name,
-            username: album.artist.user.username,
-            profileImage: album.artist.user.image,
-            isVerified: album.artist.user.isVerified,
-            isFollowing: true
-          },
-          content: {
-            text: `Released a new album: ${album.title}`,
-            album: {
-              id: album.id,
-              title: album.title,
-              artworkUrl: album.artworkUrl,
-              trackCount: album._count.tracks
-            }
-          },
-          engagement: {
-            likeCount: 0,
-            commentCount: 0,
-            isLiked: false
-          }
-        }));
-
-        feedItems = [...feedItems, ...newAlbumItems];
-      }
-
-      // Sort all feed items by timestamp
-      feedItems.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-
-      // Apply pagination
-      const paginatedItems = feedItems.slice(skip, skip + take);
-
-      res.status(200).json({
-        success: true,
-        data: {
-          items: paginatedItems,
-          pagination: {
-            page: Number(page),
-            limit: Number(limit),
-            total: feedItems.length,
-            pages: Math.ceil(feedItems.length / Number(limit))
-          }
-        }
-      });
-
-    } catch (error) {
-      logger.error('Error fetching user feed:', error);
-      res.status(500).json({
-        success: false,
-        error: { message: 'Failed to fetch user feed' }
-      });
-    }
-  }
-
-  /**
    * Get User's Following List
    */
   static async getFollowing(req: AuthenticatedRequest, res: Response): Promise<void> {
@@ -701,72 +470,54 @@ export class SocialController {
       const skip = (Number(page) - 1) * Number(limit);
       const take = Number(limit);
 
-      const following = await prisma.follow.findMany({
+      // Get artist follows (only artists can be followed)
+      const artistFollows = await prisma.follow.findMany({
         where: { followerId: userId },
-        include: {
-          following: {
-            include: {
-              artist: {
-                include: {
-                  user: true,
-                  genres: true
-                }
-              },
-              _count: {
-                select: { followers: true }
-              },
-
-            }
-          }
-        },
         skip,
         take,
         orderBy: { createdAt: 'desc' }
       });
 
+      // Get artist details for the follows
+      const artistIds = artistFollows.map(f => f.followingId);
+      const artists = await prisma.artist.findMany({
+        where: { id: { in: artistIds } },
+        include: {
+          genres: true
+        }
+      });
+
+      // Count total artist follows
       const totalFollowing = await prisma.follow.count({
         where: { followerId: userId }
       });
 
-      const users: any[] = [];
-      const artists: any[] = [];
+      const users: any[] = []; // Empty since only artists can be followed
+      const artistsResponse: any[] = [];
 
-      for (const follow of following) {
-        if (follow.following.artist) {
-          // It's an artist
-          artists.push({
-            id: follow.following.artist.id,
-            name: follow.following.artist.name,
-            profileImage: follow.following.artist.profileImage,
-            verified: follow.following.artist.verified,
-            followers: follow.following.artist.followers,
-            monthlyListeners: follow.following.artist.monthlyListeners,
-            followedAt: follow.createdAt.toISOString(),
-            genres: follow.following.artist.genres
-          });
-        } else {
-          // It's a regular user
-          users.push({
-            id: follow.following.id,
-            name: follow.following.name,
-            username: follow.following.username,
-            profileImage: follow.following.image,
-            isVerified: follow.following.isVerified,
-            followers: follow.following._count.followers,
-            bio: follow.following.bio,
-            followedAt: follow.createdAt.toISOString(),
-            isFollowingBack: false, // Would need to check
-            mutualFollowers: 0 // Would need to calculate
+      // Process artist follows
+      for (const artistFollow of artistFollows) {
+        const artist = artists.find(a => a.id === artistFollow.followingId);
+        if (artist) {
+          artistsResponse.push({
+            id: artist.id,
+            name: artist.name,
+            profileImage: artist.profileImage,
+            verified: artist.verified,
+            followers: artist.followers,
+            monthlyListeners: artist.monthlyListeners,
+            followedAt: artistFollow.createdAt.toISOString(),
+            genres: artist.genres
           });
         }
       }
 
       const response: FollowingList = {
         users,
-        artists,
+        artists: artistsResponse,
         total: {
           users: users.length,
-          artists: artists.length
+          artists: artistsResponse.length
         }
       };
 
@@ -816,8 +567,7 @@ export class SocialController {
         include: {
           track: {
             include: {
-              artist: true,
-              album: true
+              artist: true
             }
           }
         },
@@ -844,11 +594,6 @@ export class SocialController {
           verified: like.track.artist.verified,
           profileImage: like.track.artist.profileImage
         },
-        album: like.track.album ? {
-          id: like.track.album.id,
-          title: like.track.album.title,
-          artworkUrl: like.track.album.artworkUrl
-        } : undefined,
         genre: like.track.genre
       }));
 

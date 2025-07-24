@@ -1,7 +1,7 @@
 // Music Feed Types
 export interface MusicFeedItem {
   id: string;
-  type: 'new_release' | 'artist_update' | 'admin_playlist' | 'hot_track' | 'community_post' | 'liked_track';
+  type: 'new_release' | 'artist_update' | 'admin_playlist' | 'hot_track' | 'community_post' | 'liked_track' | 'album' | 'track' | 'profile' | 'playlist' | 'artist';
   title: string;
   description?: string;
   timestamp: string;
@@ -16,6 +16,10 @@ export interface MusicFeedItem {
     reason?: string; // Why this item appears in feed
     location?: string;
     ranking?: number;
+    section?: 'curated' | 'dive_in' | 'fans_follow' | 'from_artists_you_follow' | 'artists_you_follow' | 'daily_mix';
+    playCount?: number;
+    followers?: number;
+    itemType?: 'track' | 'album' | 'artist' | 'playlist' | 'profile';
   };
 }
 
@@ -111,7 +115,7 @@ export interface MusicFeedParams {
   limit?: number;
   location?: string;
   genres?: string[];
-  feedType?: 'all' | 'following' | 'new_releases' | 'hot' | 'admin_curated';
+  feedType?: 'all' | 'following' | 'new_releases' | 'hot' | 'admin_curated' | 'daily_mix' | 'artists_you_follow';
 }
 
 // Discovery Section Types

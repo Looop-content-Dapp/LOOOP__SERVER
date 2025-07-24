@@ -76,13 +76,6 @@ export type PlaylistWithTracks = Prisma.PlaylistGetPayload<{
                 verified: true;
               };
             };
-            album: {
-              select: {
-                id: true;
-                title: true;
-                artworkUrl: true;
-              };
-            };
             _count: {
               select: {
                 likes: true;
@@ -146,11 +139,6 @@ export interface PlaylistDetails extends PlaylistSummary {
         name: string;
         verified: boolean;
         profileImage?: string;
-      };
-      album?: {
-        id: string;
-        title: string;
-        artworkUrl?: string;
       };
       genre: string[];
       releaseDate: string;

@@ -8,19 +8,23 @@ import {
 
 const prisma = new PrismaClient();
 
-// Predefined genres with descriptions and images
-const SEED_GENRES = [
-  {
-    name: 'Afrobeats',
-    description: 'Contemporary African popular music blending West African musical styles with jazz, soul, and funk',
-    image: 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=400&h=300&fit=crop'
-  },
-  {
-    name: 'Pop',
-    description: 'Mainstream contemporary popular music characterized by catchy melodies and commercial appeal',
-    image: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=400&h=300&fit=crop'
-  },
-  // ... (keep all other genre definitions)
+// Predefined genres
+export const SEED_GENRES = [
+  { name: 'Afrobeats' },
+  { name: 'Pop' },
+  { name: 'Hip-Hop' },
+  { name: 'R&B' },
+  { name: 'Dance' },
+  { name: 'Electronic' },
+  { name: 'Rock' },
+  { name: 'Alternative' },
+  { name: 'Jazz' },
+  { name: 'Classical' },
+  { name: 'Country' },
+  { name: 'Folk' },
+  { name: 'Reggae' },
+  { name: 'Latin' },
+  { name: 'World' }
 ];
 
 /**
@@ -72,14 +76,9 @@ const storeGenres = async (genres: typeof SEED_GENRES) => {
 
       await prisma.genre.upsert({
         where: { name: normalizedName },
-        update: {
-          description: genre.description,
-          image: genre.image
-        },
+        update: {},
         create: {
-          name: normalizedName,
-          description: genre.description,
-          image: genre.image
+          name: normalizedName
         },
       });
     }
@@ -94,12 +93,19 @@ const storeGenres = async (genres: typeof SEED_GENRES) => {
 /**
  * Main function to populate genres
  */
-const populateGenres = async () => {
+export const populateGenres = async (options: { dryRun?: boolean } = {}) => {
+  const { dryRun = false } = options;
   try {
     console.log('🎵 Starting genre population...');
 
     // Get Spotify token
     await getValidToken();
+
+    if (dryRun) {
+      const spotifyGenres = await fetchAvailableGenreSeeds();
+      console.log('DRY RUN: Would store ' + (SEED_GENRES.length + spotifyGenres.length) + ' genres');
+      return { count: SEED_GENRES.length + spotifyGenres.length };
+    }
 
     // Store predefined genres
     await storeGenres(SEED_GENRES);
@@ -107,18 +113,17 @@ const populateGenres = async () => {
     // Fetch and store Spotify genres
     const spotifyGenres = await fetchAvailableGenreSeeds();
     const spotifyGenreObjects = spotifyGenres.map(name => ({
-      name,
-      description: `Genre from Spotify: ${name}`,
-      image: null
+      name
     }));
     await storeGenres(spotifyGenreObjects);
 
     console.log('✨ Genre population completed successfully');
+    return { count: SEED_GENRES.length + spotifyGenres.length };
   } catch (error) {
     console.error('Error in genre population:', error);
-    process.exit(1);
+    if (!dryRun) process.exit(1);
   } finally {
-    await prisma.$disconnect();
+    if (!dryRun) await prisma.$disconnect();
   }
 };
 

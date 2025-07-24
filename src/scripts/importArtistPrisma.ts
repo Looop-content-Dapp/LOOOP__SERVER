@@ -8,7 +8,7 @@ import {
   transformSpotifyRelease,
   transformSpotifyToSong,
   prisma
-} from './spotify/spotifyPrismaClient.js';
+} from './spotify/spotifyPrismaClient';
 
 interface ImportOptions {
   limitArtists?: number;
@@ -73,7 +73,12 @@ const createArtistUser = async (spotifyArtist) => {
 /**
  * Import or update artist
  */
-const importArtist = async (spotifyArtist) => {
+interface ArtistImportOptions {
+  skipUserCreation?: boolean;
+}
+
+const importArtist = async (spotifyArtist, options: ArtistImportOptions = {}) => {
+  const { skipUserCreation = true } = options; // Changed default to true
   try {
     // Check if artist already exists
     const existingArtist = await prisma.artist.findFirst({
@@ -91,11 +96,10 @@ const importArtist = async (spotifyArtist) => {
       return existingArtist;
     }
 
-    // Create user for the artist
-    const user = await createArtistUser(spotifyArtist);
+    // Removed user creation
 
     // Transform and create artist
-    const artistData = transformSpotifyArtist(spotifyArtist, user);
+    const artistData = transformSpotifyArtist(spotifyArtist);
 
     // Handle genres through Genre model
     const genreConnections = spotifyArtist.genres?.map(genreName => ({
@@ -110,6 +114,7 @@ const importArtist = async (spotifyArtist) => {
     const artist = await prisma.artist.create({
       data: {
         ...artistData,
+        userId: null, // Explicitly set to null
         genres: {
           create: genreConnections
         }

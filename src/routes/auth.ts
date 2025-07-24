@@ -9,7 +9,7 @@ import { register } from '@/controllers/auth/register';
 import { getProfile, updateProfile, deleteAccount } from '@/controllers/auth/profile';
 import { changePassword, forgotPassword, resetPassword } from '@/controllers/auth/password';
 import { verifyEmail, verifyEmailOTP, resendVerification, sendVerificationOTP, checkEmailVerification } from '@/controllers/auth/email';
-import { googleAuth, googleAuthCallback, appleAuth, appleAuthCallback } from '@/controllers/auth/oauth';
+import { mobileGoogleAuth, mobileAppleAuth } from '@/controllers/auth/oauth';
 
 const router: Router = Router();
 
@@ -42,11 +42,9 @@ router.delete('/account', requireAuth, asyncHandler(deleteAccount));
 
 // OAuth routes
 
-
-router.get('/google', asyncHandler(googleAuth));
-router.get('/google/callback', asyncHandler(googleAuthCallback));
-router.get('/apple', asyncHandler(appleAuth));
-router.post('/apple/callback', asyncHandler(appleAuthCallback)); // Note: Apple uses POST for callback
+// Mobile OAuth routes for direct token verification
+router.post('/mobile/google', asyncHandler(mobileGoogleAuth));
+router.post('/mobile/apple', asyncHandler(mobileAppleAuth));
 
 // Auth status check (public endpoint)
 router.get('/status', optionalAuth, (req: Request, res: Response) => {
@@ -77,6 +75,12 @@ router.get('/health', (_req: Request, res: Response) => {
         'POST /send-verification-otp',
         'POST /verify-email-otp',
         'POST /verify-email',
+        'GET /google',
+        'GET /google/callback',
+        'GET /apple',
+        'POST /apple/callback',
+        'POST /mobile/google',
+        'POST /mobile/apple',
         'GET /status',
         'GET /health'
       ],

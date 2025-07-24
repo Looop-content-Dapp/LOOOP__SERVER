@@ -1,0 +1,334 @@
+{
+  "info": {
+    "name": "LOOOP Social Endpoints",
+    "description": "Collection for testing LOOOP social features including follow/unfollow, likes, comments, feed, and social stats",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{auth_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:5000/api/v1",
+      "type": "string"
+    },
+    {
+      "key": "auth_token",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/social/health",
+          "host": ["{{base_url}}"],
+          "path": ["social", "health"]
+        },
+        "description": "Check if social routes are active and get endpoint information"
+      },
+      "response": []
+    },
+    {
+      "name": "Follow User/Artist",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"followingId\": \"user_id_to_follow\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/social/follow",
+          "host": ["{{base_url}}"],
+          "path": ["social", "follow"]
+        },
+        "description": "Follow or unfollow a user/artist. Toggles follow status."
+      },
+      "response": []
+    },
+    {
+      "name": "Like Track",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"trackId\": \"track_id_to_like\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/social/like",
+          "host": ["{{base_url}}"],
+          "path": ["social", "like"]
+        },
+        "description": "Like or unlike a track. Toggles like status."
+      },
+      "response": []
+    },
+    {
+      "name": "Add Comment to Post",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"content\": \"This is a comment on a post\",\n  \"postId\": \"post_id_here\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/social/comments",
+          "host": ["{{base_url}}"],
+          "path": ["social", "comments"]
+        },
+        "description": "Add a comment to a post"
+      },
+      "response": []
+    },
+    {
+      "name": "Add Comment to Track",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"content\": \"Great track! Love the beat.\",\n  \"trackId\": \"track_id_here\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/social/comments",
+          "host": ["{{base_url}}"],
+          "path": ["social", "comments"]
+        },
+        "description": "Add a comment to a track"
+      },
+      "response": []
+    },
+    {
+      "name": "Reply to Comment",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"content\": \"I agree with your comment!\",\n  \"postId\": \"post_id_here\",\n  \"parentId\": \"parent_comment_id\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/social/comments",
+          "host": ["{{base_url}}"],
+          "path": ["social", "comments"]
+        },
+        "description": "Reply to an existing comment"
+      },
+      "response": []
+    },
+    {
+      "name": "Get User Feed - All",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/social/feed?page=1&limit=20&type=all",
+          "host": ["{{base_url}}"],
+          "path": ["social", "feed"],
+          "query": [
+            {
+              "key": "page",
+              "value": "1"
+            },
+            {
+              "key": "limit",
+              "value": "20"
+            },
+            {
+              "key": "type",
+              "value": "all"
+            }
+          ]
+        },
+        "description": "Get user's social feed with all content types"
+      },
+      "response": []
+    },
+    {
+      "name": "Get User Feed - Community Posts Only",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/social/feed?page=1&limit=10&type=community_posts",
+          "host": ["{{base_url}}"],
+          "path": ["social", "feed"],
+          "query": [
+            {
+              "key": "page",
+              "value": "1"
+            },
+            {
+              "key": "limit",
+              "value": "10"
+            },
+            {
+              "key": "type",
+              "value": "community_posts"
+            }
+          ]
+        },
+        "description": "Get user's feed filtered to community posts only"
+      },
+      "response": []
+    },
+    {
+      "name": "Get User Feed - Music Updates Only",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/social/feed?page=1&limit=15&type=music_updates",
+          "host": ["{{base_url}}"],
+          "path": ["social", "feed"],
+          "query": [
+            {
+              "key": "page",
+              "value": "1"
+            },
+            {
+              "key": "limit",
+              "value": "15"
+            },
+            {
+              "key": "type",
+              "value": "music_updates"
+            }
+          ]
+        },
+        "description": "Get user's feed filtered to music updates only"
+      },
+      "response": []
+    },
+    {
+      "name": "Get Following List",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/social/following?page=1&limit=50",
+          "host": ["{{base_url}}"],
+          "path": ["social", "following"],
+          "query": [
+            {
+              "key": "page",
+              "value": "1"
+            },
+            {
+              "key": "limit",
+              "value": "50"
+            }
+          ]
+        },
+        "description": "Get list of users/artists that the current user follows"
+      },
+      "response": []
+    },
+    {
+      "name": "Get Liked Tracks",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/social/liked-tracks?page=1&limit=30",
+          "host": ["{{base_url}}"],
+          "path": ["social", "liked-tracks"],
+          "query": [
+            {
+              "key": "page",
+              "value": "1"
+            },
+            {
+              "key": "limit",
+              "value": "30"
+            }
+          ]
+        },
+        "description": "Get list of tracks liked by the current user"
+      },
+      "response": []
+    },
+    {
+      "name": "Get Current User Social Stats",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/social/stats",
+          "host": ["{{base_url}}"],
+          "path": ["social", "stats"]
+        },
+        "description": "Get social statistics for the current authenticated user"
+      },
+      "response": []
+    },
+    {
+      "name": "Get Specific User Social Stats",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/social/stats/{{user_id}}",
+          "host": ["{{base_url}}"],
+          "path": ["social", "stats", "{{user_id}}"]
+        },
+        "description": "Get social statistics for a specific user by their ID"
+      },
+      "response": []
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Set auth token if not already set",
+          "if (!pm.collectionVariables.get('auth_token')) {",
+          "    console.log('Please set the auth_token variable with a valid JWT token');",
+          "}"
+        ]
+      }
+    }
+  ]
+}

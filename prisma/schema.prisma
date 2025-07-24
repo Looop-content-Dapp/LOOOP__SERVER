@@ -32,15 +32,15 @@ enum AuthProvider {
 
 // User model for LOOOP platform
 model User {
-    id                   String       @id @default(cuid())
+    id                   String        @id @default(cuid())
     name                 String
-    email                String       @unique
+    email                String        @unique
     password             String
-    emailVerified        Boolean      @default(false)
+    emailVerified        Boolean       @default(false)
     image                String?
-    username             String?      @unique
+    username             String?       @unique
     bio                  String?
-    isVerified           Boolean      @default(false)
+    isVerified           Boolean       @default(false)
     lastLoginAt          DateTime?
     lastUsernameChangeAt DateTime?
     DateOfBirth          DateTime?
@@ -66,7 +66,6 @@ model User {
     comments           Comment[]
     posts              Post[]
     following          Follow[]             @relation("UserFollowing")
-    followers          Follow[]             @relation("UserFollowers")
     nfts               NFT[]
     communities        CommunityMember[]
     playHistory        PlayHistory[]
@@ -97,8 +96,8 @@ model Verification {
 
 model Artist {
     id               String        @id @default(cuid())
-    userId           String        @unique
-    user             User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+    userId          String?        @unique
+    user             User?          @relation(fields: [userId], references: [id], onDelete: Cascade)
     artistId         String?
     name             String
     email            String        @unique
@@ -129,7 +128,6 @@ model Artist {
 
     // Relations
     tracks                Track[]
-    albums                Album[]
     communities           Community[]
     releases              Release[]
     subscriptionPlans     ArtistSubscriptionPlan[]
@@ -149,14 +147,12 @@ model Track {
     version    String   @default("Original")
     artistId   String
     artist     Artist   @relation(fields: [artistId], references: [id], onDelete: Cascade)
-    albumId    String?
-    album      Album?   @relation(fields: [albumId], references: [id])
     releaseId  String?
     release    Release? @relation("ReleaseTracks", fields: [releaseId], references: [id])
     songId     String?
     song       Song?    @relation("SongTracks", fields: [songId], references: [id])
-    userId     String
-    user       User     @relation(fields: [userId], references: [id])
+    userId     String?
+    user       User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
     duration   Int // Duration in seconds
     fileUrl    String
     artworkUrl String?
@@ -188,24 +184,6 @@ model Track {
     @@map("tracks")
 }
 
-model Album {
-    id          String    @id @default(cuid())
-    title       String
-    slug        String    @unique
-    artistId    String
-    artist      Artist    @relation(fields: [artistId], references: [id], onDelete: Cascade)
-    artworkUrl  String?
-    releaseDate DateTime?
-    isPublic    Boolean   @default(true)
-    createdAt   DateTime  @default(now())
-    updatedAt   DateTime  @updatedAt
-
-    // Relations
-    tracks Track[]
-
-    @@map("albums")
-}
-
 model Playlist {
     id          String   @id @default(cuid())
     title       String
@@ -216,6 +194,8 @@ model Playlist {
     artworkUrl  String?
     createdAt   DateTime @default(now())
     updatedAt   DateTime @updatedAt
+    isFeatured Boolean @default(false)
+    featuredAt DateTime?
 
     // Relations
     tracks PlaylistTrack[]
@@ -271,7 +251,7 @@ model Follow {
     followerId  String
     follower    User     @relation("UserFollowing", fields: [followerId], references: [id], onDelete: Cascade)
     followingId String
-    following   User     @relation("UserFollowers", fields: [followingId], references: [id], onDelete: Cascade)
+    // followingId can reference either a User or an Artist - no foreign key constraint
     createdAt   DateTime @default(now())
 
     @@unique([followerId, followingId])

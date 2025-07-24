@@ -215,13 +215,6 @@ export class StreamingService {
                     profileImage: true,
                     verified: true
                   }
-                },
-                album: {
-                  select: {
-                    id: true,
-                    title: true,
-                    artworkUrl: true
-                  }
                 }
               }
             }
@@ -271,13 +264,6 @@ export class StreamingService {
                   name: true,
                   profileImage: true,
                   verified: true
-                }
-              },
-              album: {
-                select: {
-                  id: true,
-                  title: true,
-                  artworkUrl: true
                 }
               }
             }
@@ -428,11 +414,6 @@ export class StreamingService {
           profileImage: entry.track.artist.profileImage,
           verified: entry.track.artist.verified
         },
-        album: entry.track.album ? {
-          id: entry.track.album.id,
-          title: entry.track.album.title,
-          artworkUrl: entry.track.album.artworkUrl
-        } : undefined,
         genre: entry.track.genre
       }
     };

@@ -1,15 +1,18 @@
 import 'dotenv/config';
-import { 
-  spotifyApi, 
-  getValidToken, 
+import {
+  spotifyApi,
+  getValidToken,
   retryOnRateLimit,
-  prisma 
-} from './spotify/spotifyPrismaClient.js';
-import { 
+  prisma
+} from './spotify/spotifyPrismaClient';
+import {
   importArtistsByGenre,
-  importArtistByName 
-} from './importArtistPrisma.js';
-import { populateGenres, SEED_GENRES } from './populateGenresPrisma.js';
+  importArtistByName
+} from './importArtistPrisma';
+import {
+  populateGenres, SEED_GENRES
+} from './populateGenresPrisma';
+
 
 // Configuration for import limits
 const IMPORT_CONFIG = {
@@ -71,9 +74,10 @@ const getDatabaseStats = async () => {
 /**
  * Import featured/popular artists across genres
  */
-const importFeaturedArtists = async (options = {}) => {
+interface FeaturedOptions { dryRun?: boolean }
+const importFeaturedArtists = async (options: FeaturedOptions = {}) => {
   const { dryRun = false } = options;
-  
+
   // List of popular artists to ensure we get good data
   const featuredArtists = [
     'Taylor Swift',
@@ -132,9 +136,10 @@ const importFeaturedArtists = async (options = {}) => {
 /**
  * Import artists by genres
  */
-const importArtistsByGenres = async (genresToImport, options = {}) => {
+interface GenreOptions { dryRun?: boolean }
+const importArtistsByGenres = async (genresToImport, options: GenreOptions = {}) => {
   const { dryRun = false } = options;
-  
+
   logProgress(`Importing artists for ${genresToImport.length} genres...`);
 
   const genreResults = [];
@@ -160,7 +165,7 @@ const importArtistsByGenres = async (genresToImport, options = {}) => {
       if (result.imported) {
         const successfulImports = result.results.filter(r => r.success).length;
         importStats.artistsImported += successfulImports;
-        
+
         logProgress(`Successfully imported ${successfulImports} artists for genre: ${genre.name}`, 'success');
         genreResults.push({ genre: genre.name, success: true, artistCount: successfulImports });
       }
@@ -209,7 +214,7 @@ const updateSongUrls = async () => {
     let updatedCount = 0;
     for (const song of songs) {
       const randomUrl = sampleUrls[Math.floor(Math.random() * sampleUrls.length)];
-      
+
       await prisma.song.update({
         where: { id: song.id },
         data: {
@@ -218,7 +223,7 @@ const updateSongUrls = async () => {
           bitrate: 320
         }
       });
-      
+
       updatedCount++;
     }
 
@@ -234,9 +239,15 @@ const updateSongUrls = async () => {
 /**
  * Main import function
  */
-const importSpotifyData = async (options = {}) => {
-  const { 
-    dryRun = false, 
+interface ImportOptions {
+  dryRun?: boolean;
+  includeGenres?: boolean;
+  includeFeatured?: boolean;
+  genreLimit?: number;
+}
+const importSpotifyData = async (options: ImportOptions = {}) => {
+  const {
+    dryRun = false,
     includeGenres = true,
     includeFeatured = true,
     genreLimit = IMPORT_CONFIG.genresToProcess
@@ -247,7 +258,7 @@ const importSpotifyData = async (options = {}) => {
   try {
     logProgress('🚀 Starting comprehensive Spotify data import...');
     logProgress(`Mode: ${dryRun ? 'DRY RUN' : 'LIVE'}`);
-    
+
     // Get initial database stats
     const initialStats = await getDatabaseStats();
     if (initialStats) {
@@ -274,7 +285,7 @@ const importSpotifyData = async (options = {}) => {
     let genreArtistResults = [];
     if (includeGenres) {
       logProgress('\n🎵 Step 3: Importing artists by genres...');
-      
+
       // Select genres to process (limit for performance)
       const genresToImport = SEED_GENRES.slice(0, genreLimit);
       genreArtistResults = await importArtistsByGenres(genresToImport, { dryRun });
@@ -297,12 +308,12 @@ const importSpotifyData = async (options = {}) => {
 
     logProgress('\n✅ Import completed successfully!');
     logProgress(`⏱️  Total duration: ${duration} seconds`);
-    
+
     if (finalStats && initialStats) {
       const artistsAdded = finalStats.artists - initialStats.artists;
       const tracksAdded = finalStats.tracks - initialStats.tracks;
       const songsAdded = finalStats.songs - initialStats.songs;
-      
+
       logProgress(`📊 Database changes:`);
       logProgress(`  Artists: ${initialStats.artists} → ${finalStats.artists} (+${artistsAdded})`);
       logProgress(`  Tracks: ${initialStats.tracks} → ${finalStats.tracks} (+${tracksAdded})`);
@@ -340,7 +351,7 @@ const importSpotifyData = async (options = {}) => {
   } catch (error) {
     importStats.endTime = new Date();
     logProgress(`Fatal error during import: ${error.message}`, 'error');
-    
+
     return {
       success: false,
       error: error.message,
@@ -353,7 +364,7 @@ const importSpotifyData = async (options = {}) => {
 /**
  * CLI execution
  */
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (require.main === module) {
   (async () => {
     try {
       const args = process.argv.slice(2);
@@ -400,7 +411,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   })();
 }
 
-export { 
+export {
   importSpotifyData,
   updateSongUrls,
   importFeaturedArtists,

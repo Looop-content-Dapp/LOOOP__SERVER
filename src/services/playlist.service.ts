@@ -189,13 +189,6 @@ export class PlaylistService {
                       verified: true
                     }
                   },
-                  album: {
-                    select: {
-                      id: true,
-                      title: true,
-                      artworkUrl: true
-                    }
-                  },
                   _count: {
                     select: {
                       likes: true
@@ -547,11 +540,6 @@ export class PlaylistService {
           verified: pt.track.artist.verified,
           profileImage: pt.track.artist.profileImage
         },
-        album: pt.track.album ? {
-          id: pt.track.album.id,
-          title: pt.track.album.title,
-          artworkUrl: pt.track.album.artworkUrl
-        } : undefined,
         genre: pt.track.genre,
         releaseDate: pt.track.createdAt.toISOString()
       }

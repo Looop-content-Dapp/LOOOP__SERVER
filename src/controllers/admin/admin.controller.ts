@@ -378,3 +378,50 @@ export const checkBootstrapStatus = async (req: Request, res: Response): Promise
     });
   }
 };
+
+/**
+ * Get all admin playlists
+ */
+export const getAdminPlaylists = async (req: AdminRequest, res: Response): Promise<void> => {
+  try {
+    const params = {
+      page: req.query.page ? Number(req.query.page) : undefined,
+      limit: req.query.limit ? Number(req.query.limit) : undefined,
+      sortBy: req.query.sortBy as string,
+      sortOrder: req.query.sortOrder as 'asc' | 'desc',
+      search: req.query.search as string,
+      featuredOnly: req.query.featuredOnly === 'true'
+    };
+
+    const result = await AdminService.getAdminPlaylists(params);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        playlists: result.playlists,
+        pagination: {
+          page: Number(params.page) || 1,
+          limit: Number(params.limit) || 20,
+          total: result.total,
+          pages: Math.ceil(result.total / (Number(params.limit) || 20))
+        }
+      }
+    });
+
+  } catch (error) {
+    logger.error('Error getting admin playlists:', error);
+
+    if (error.statusCode) {
+      res.status(error.statusCode).json({
+        success: false,
+        error: { message: error.message }
+      });
+      return;
+    }
+
+    res.status(500).json({
+      success: false,
+      error: { message: 'Internal server error' }
+    });
+  }
+};

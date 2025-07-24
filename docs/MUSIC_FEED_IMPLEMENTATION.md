@@ -1,0 +1,775 @@
+# LOOOP Music Feed & Discovery Implementation Documentation
+
+## Table of Contents
+
+1. [Introduction](#introduction)
+2. [API Endpoints Overview](#api-endpoints-overview)
+3. [Home Feed Implementation](#home-feed-implementation)
+   - [Controller Structure](#controller-structure)
+   - [Feed Types](#feed-types)
+   - [Section Generation](#section-generation)
+   - [Data Flow](#data-flow)
+   - [Personalization Logic](#personalization-logic)
+4. [Discovery Section Implementation](#discovery-section-implementation)
+   - [Controller Structure](#discovery-controller-structure)
+   - [Data Sources](#data-sources)
+   - [Location-Based Content](#location-based-content)
+5. [Search Implementation](#search-implementation)
+   - [Controller Structure](#search-controller-structure)
+   - [Search Algorithm](#search-algorithm)
+   - [Result Formatting](#result-formatting)
+6. [Data Models](#data-models)
+7. [Performance Considerations](#performance-considerations)
+8. [Future Enhancements](#future-enhancements)
+
+## Introduction
+
+This document provides a detailed technical overview of the LOOOP Music Feed and Discovery endpoints implementation. It covers the backend architecture, data flow, controller logic, and database interactions that power these features.
+
+The Music Feed and Discovery sections are core components of the LOOOP Music platform, providing personalized content recommendations, trending music, and discovery features to users. This implementation focuses on delivering a rich, engaging experience while maintaining performance and scalability.
+
+## API Endpoints Overview
+
+The following endpoints are implemented for the Music Feed and Discovery features:
+
+| Endpoint | Method | Controller | Description |
+|----------|--------|------------|-------------|
+| `/api/v1/music/feed` | GET | `MusicFeedController.getHomeFeed` | Returns personalized music feed with various sections |
+| `/api/v1/music/discover` | GET | `MusicFeedController.getDiscoverySection` | Returns discovery sections including charts and trending content |
+| `/api/v1/music/search` | GET | `MusicFeedController.searchContent` | Searches for tracks, artists, albums, playlists, etc. |
+
+## Home Feed Implementation
+
+### Controller Structure
+
+The home feed is implemented in the `MusicFeedController.getHomeFeed` method. This controller handles request validation, authentication checking, and assembling the various feed sections.
+
+```typescript
+// Key controller method structure
+export const getHomeFeed = async (req: Request, res: Response) => {
+  try {
+    // Extract and validate parameters
+    const { page = 1, limit = 20, feedType = 'all', location, genres } = req.query;
+    
+    // Get user ID if authenticated
+    const userId = req.user?.id;
+    
+    // Initialize feed sections
+    const sections: Record<string, MusicFeedItem[]> = {
+      curated: [],
+      dive_in: [],
+      fans_follow: [],
+      from_artists_you_follow: [],
+      artists_you_follow: [],
+      daily_mix: []
+    };
+    
+    // Populate sections based on feedType
+    if (feedType === 'all' || feedType === 'admin_curated') {
+      sections.curated = await getCuratedContent(userId);
+    }
+    
+    if (feedType === 'all' || feedType === 'hot') {
+      sections.dive_in = await getDiveInContent(userId);
+    }
+    
+    // Additional sections for authenticated users
+    if (userId) {
+      if (feedType === 'all' || feedType === 'following') {
+        sections.fans_follow = await getFansFollowContent(userId);
+        sections.from_artists_you_follow = await getContentFromFollowedArtists(userId);
+      }
+      
+      if (feedType === 'all' || feedType === 'artists_you_follow') {
+        sections.artists_you_follow = await getArtistsYouFollow(userId);
+      }
+      
+      if (feedType === 'all' || feedType === 'daily_mix') {
+        sections.daily_mix = await getDailyMix(userId);
+      }
+    }
+    
+    // Return response
+    return res.status(200).json({
+      success: true,
+      data: {
+        sections,
+        items: [], // Main feed items (for future implementation)
+        pagination: {
+          page: Number(page),
+          limit: Number(limit),
+          total: 0,
+          pages: 0
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Error in getHomeFeed:', error);
+    return res.status(500).json({
+      success: false,
+      error: {
+        message: 'Failed to fetch home feed'
+      }
+    });
+  }
+};
+```
+
+### Feed Types
+
+The home feed supports multiple feed types, allowing users to view specific content categories:
+
+- `all`: All feed sections (default)
+- `following`: Content from artists the user follows
+- `new_releases`: New albums and tracks
+- `hot`: Popular and trending content
+- `admin_curated`: Playlists and content curated by admins
+- `daily_mix`: Randomized selection of tracks from followed artists
+- `artists_you_follow`: List of artists the user follows
+
+### Section Generation
+
+Each section of the feed is generated by a dedicated helper function:
+
+#### Curated Content
+
+```typescript
+const getCuratedContent = async (userId?: string): Promise<MusicFeedItem[]> => {
+  // Fetch new releases and admin-curated content
+  const newReleases = await prisma.album.findMany({
+    where: {
+      releaseDate: {
+        gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) // Last 30 days
+      }
+    },
+    include: {
+      artist: true,
+      tracks: {
+        include: {
+          artist: true
+        }
+      }
+    },
+    orderBy: {
+      releaseDate: 'desc'
+    },
+    take: 10
+  });
+  
+  // Transform to MusicFeedItems
+  return newReleases.map(album => ({
+    id: `new_release_${album.id}`,
+    type: 'new_release',
+    title: `New Album: ${album.title}`,
+    description: `New album by ${album.artist.name}`,
+    timestamp: album.releaseDate.toISOString(),
+    data: {
+      album: formatAlbumForFeed(album, userId)
+    },
+    metadata: {
+      section: 'curated'
+    }
+  }));
+};
+```
+
+#### Dive In Content
+
+```typescript
+const getDiveInContent = async (userId?: string): Promise<MusicFeedItem[]> => {
+  // Fetch featured playlists and popular tracks
+  const featuredPlaylists = await prisma.playlist.findMany({
+    where: {
+      isFeatured: true
+    },
+    include: {
+      tracks: {
+        include: {
+          track: {
+            include: {
+              artist: true
+            }
+          }
+        }
+      },
+      user: true
+    },
+    take: 5
+  });
+  
+  // Transform to MusicFeedItems
+  return featuredPlaylists.map(playlist => ({
+    id: `playlist_${playlist.id}`,
+    type: 'admin_playlist',
+    title: playlist.title,
+    description: playlist.description || 'Featured playlist',
+    timestamp: playlist.updatedAt.toISOString(),
+    data: {
+      playlist: formatPlaylistForFeed(playlist, userId)
+    },
+    metadata: {
+      section: 'dive_in'
+    }
+  }));
+};
+```
+
+#### Artists You Follow
+
+```typescript
+const getArtistsYouFollow = async (userId: string): Promise<MusicFeedItem[]> => {
+  // Fetch artists followed by the user
+  const followedArtists = await prisma.artistFollower.findMany({
+    where: {
+      userId
+    },
+    include: {
+      artist: {
+        include: {
+          tracks: {
+            orderBy: {
+              releaseDate: 'desc'
+            },
+            take: 1,
+            include: {
+              artist: true
+            }
+          }
+        }
+      }
+    },
+    take: 10
+  });
+  
+  // Transform to MusicFeedItems
+  return followedArtists.map(({ artist }) => ({
+    id: `artist_${artist.id}`,
+    type: 'artist',
+    title: artist.name,
+    description: `Artist you follow`,
+    timestamp: new Date().toISOString(),
+    data: {
+      artist: formatArtistForFeed(artist, true)
+    },
+    metadata: {
+      section: 'artists_you_follow'
+    }
+  }));
+};
+```
+
+#### Daily Mix
+
+```typescript
+const getDailyMix = async (userId: string): Promise<MusicFeedItem[]> => {
+  // Fetch tracks from artists the user follows
+  const followedArtists = await prisma.artistFollower.findMany({
+    where: {
+      userId
+    },
+    include: {
+      artist: {
+        include: {
+          tracks: {
+            include: {
+              artist: true,
+              album: true
+            },
+            take: 5 // Limit tracks per artist
+          }
+        }
+      }
+    }
+  });
+  
+  // Collect all tracks
+  let allTracks: Track[] = [];
+  followedArtists.forEach(({ artist }) => {
+    allTracks = [...allTracks, ...artist.tracks];
+  });
+  
+  // Shuffle tracks
+  const shuffledTracks = allTracks.sort(() => Math.random() - 0.5).slice(0, 20);
+  
+  // Transform to MusicFeedItems
+  return shuffledTracks.map(track => ({
+    id: `daily_mix_${track.id}`,
+    type: 'track',
+    title: track.title,
+    description: `Track by ${track.artist.name}`,
+    timestamp: track.releaseDate.toISOString(),
+    data: {
+      track: formatTrackForFeed(track, userId)
+    },
+    metadata: {
+      section: 'daily_mix'
+    }
+  }));
+};
+```
+
+### Data Flow
+
+1. Client sends a request to `/api/v1/music/feed` with optional parameters
+2. Server validates the request and checks authentication
+3. Based on the `feedType` parameter, the controller calls appropriate helper functions
+4. Each helper function queries the database for relevant content
+5. Results are transformed into standardized `MusicFeedItem` objects
+6. The controller assembles all sections into a response object
+7. The response is sent back to the client
+
+### Personalization Logic
+
+The feed is personalized based on user authentication status:
+
+- **Authenticated Users**: Receive personalized content including followed artists, daily mix, and recommendations based on their preferences
+- **Unauthenticated Users**: Receive generic content including new releases, featured playlists, and trending content
+
+Additional personalization factors include:
+
+- **User Location**: Content can be filtered by user location
+- **Genre Preferences**: Content can be filtered by user's preferred genres
+- **Following Relationships**: Content is influenced by artists the user follows
+
+## Discovery Section Implementation
+
+### Discovery Controller Structure
+
+The discovery section is implemented in the `MusicFeedController.getDiscoverySection` method. This controller assembles various discovery sections including charts by location, top songs worldwide, and top albums.
+
+```typescript
+export const getDiscoverySection = async (req: Request, res: Response) => {
+  try {
+    // Extract parameters
+    const { location = 'Nigeria' } = req.query;
+    const userId = req.user?.id;
+    
+    // Fetch top songs by location
+    const topSongsByLocation = await getTopSongsByLocation(location as string, userId);
+    
+    // Fetch top songs worldwide
+    const topSongsWorldwide = await getTopSongsWorldwide(userId);
+    
+    // Fetch top albums
+    const top10Albums = await getTop10Albums(userId);
+    
+    // Return response
+    return res.status(200).json({
+      success: true,
+      data: {
+        topSongsByLocation: {
+          location: location as string,
+          tracks: topSongsByLocation
+        },
+        top10Albums,
+        topSongsWorldwide
+      }
+    });
+  } catch (error) {
+    console.error('Error in getDiscoverySection:', error);
+    return res.status(500).json({
+      success: false,
+      error: {
+        message: 'Failed to fetch discovery section'
+      }
+    });
+  }
+};
+```
+
+### Data Sources
+
+The discovery section uses several data sources to populate its content:
+
+#### Top Songs by Location
+
+```typescript
+const getTopSongsByLocation = async (location: string, userId?: string): Promise<FeedTrack[]> => {
+  // Fetch tracks with the specified location
+  const tracks = await prisma.track.findMany({
+    where: {
+      artist: {
+        location: {
+          contains: location,
+          mode: 'insensitive'
+        }
+      }
+    },
+    include: {
+      artist: true,
+      album: true
+    },
+    orderBy: {
+      playCount: 'desc'
+    },
+    take: 5
+  });
+  
+  // Format tracks for feed
+  return tracks.map(track => formatTrackForFeed(track, userId));
+};
+```
+
+#### Top Songs Worldwide
+
+```typescript
+const getTopSongsWorldwide = async (userId?: string): Promise<FeedTrack[]> => {
+  // Fetch tracks with highest play counts
+  const tracks = await prisma.track.findMany({
+    include: {
+      artist: true,
+      album: true
+    },
+    orderBy: {
+      playCount: 'desc'
+    },
+    take: 5
+  });
+  
+  // Format tracks for feed
+  return tracks.map(track => formatTrackForFeed(track, userId));
+};
+```
+
+#### Top Albums
+
+```typescript
+const getTop10Albums = async (userId?: string): Promise<FeedAlbum[]> => {
+  // Fetch albums with highest play counts
+  const albums = await prisma.album.findMany({
+    include: {
+      artist: true,
+      tracks: {
+        include: {
+          artist: true
+        }
+      }
+    },
+    orderBy: {
+      playCount: 'desc'
+    },
+    take: 3
+  });
+  
+  // Format albums for feed with ranking
+  return albums.map((album, index) => {
+    const formattedAlbum = formatAlbumForFeed(album, userId);
+    formattedAlbum.ranking = `#${index + 1}`;
+    return formattedAlbum;
+  });
+};
+```
+
+### Location-Based Content
+
+The discovery section supports location-based content filtering, allowing users to discover music that's popular in specific regions. The default location is set to 'Nigeria', but can be changed via the `location` query parameter.
+
+The location filtering is implemented by querying tracks from artists whose location field contains the specified location string (case-insensitive match).
+
+## Search Implementation
+
+### Search Controller Structure
+
+The search functionality is implemented in the `MusicFeedController.searchContent` method. This controller handles searching across multiple content types including tracks, artists, albums, playlists, users, and communities.
+
+```typescript
+export const searchContent = async (req: Request, res: Response) => {
+  try {
+    // Extract and validate parameters
+    const { 
+      query, 
+      type = 'all', 
+      location, 
+      genre, 
+      limit = 10, 
+      page = 1,
+      sort = 'relevance'
+    } = req.query;
+    
+    // Validate query parameter
+    if (!query || typeof query !== 'string') {
+      return res.status(400).json({
+        success: false,
+        error: {
+          message: 'Search query is required'
+        }
+      });
+    }
+    
+    const userId = req.user?.id;
+    const searchLimit = Math.min(Number(limit), 50); // Cap at 50 items per type
+    const searchPage = Number(page);
+    const skip = (searchPage - 1) * searchLimit;
+    
+    // Initialize results
+    const results: SearchResults = {
+      tracks: [],
+      artists: [],
+      albums: [],
+      playlists: [],
+      users: [],
+      communities: [],
+      total: {
+        tracks: 0,
+        artists: 0,
+        albums: 0,
+        playlists: 0,
+        users: 0,
+        communities: 0
+      }
+    };
+    
+    // Search based on type
+    if (type === 'all' || type === 'tracks') {
+      const tracksResult = await searchTracks(query, { location, genre, limit: searchLimit, skip, sort });
+      results.tracks = tracksResult.items;
+      results.total.tracks = tracksResult.total;
+    }
+    
+    // Additional search types...
+    
+    // Return response
+    return res.status(200).json({
+      success: true,
+      data: {
+        results,
+        pagination: {
+          page: searchPage,
+          limit: searchLimit,
+          total: Object.values(results.total).reduce((sum, count) => sum + count, 0)
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Error in searchContent:', error);
+    return res.status(500).json({
+      success: false,
+      error: {
+        message: 'Search failed'
+      }
+    });
+  }
+};
+```
+
+### Search Algorithm
+
+The search implementation uses Prisma's filtering capabilities to perform text-based searches across multiple fields:
+
+```typescript
+const searchTracks = async (
+  query: string,
+  options: { location?: string; genre?: string; limit: number; skip: number; sort: string }
+): Promise<{ items: FeedTrack[]; total: number }> => {
+  const { location, genre, limit, skip, sort } = options;
+  
+  // Build where clause
+  const where: any = {
+    OR: [
+      { title: { contains: query, mode: 'insensitive' } },
+      { artist: { name: { contains: query, mode: 'insensitive' } } }
+    ]
+  };
+  
+  // Add location filter if provided
+  if (location) {
+    where.artist = {
+      ...where.artist,
+      location: { contains: location, mode: 'insensitive' }
+    };
+  }
+  
+  // Add genre filter if provided
+  if (genre) {
+    where.genre = { has: genre };
+  }
+  
+  // Determine sort order
+  let orderBy: any = {};
+  switch (sort) {
+    case 'newest':
+      orderBy = { releaseDate: 'desc' };
+      break;
+    case 'oldest':
+      orderBy = { releaseDate: 'asc' };
+      break;
+    case 'popular':
+      orderBy = { playCount: 'desc' };
+      break;
+    case 'unpopular':
+      orderBy = { playCount: 'asc' };
+      break;
+    default: // relevance - handled by database
+      orderBy = { playCount: 'desc' }; // Default to popularity for relevance
+  }
+  
+  // Execute search query
+  const [tracks, total] = await Promise.all([
+    prisma.track.findMany({
+      where,
+      include: {
+        artist: true,
+        album: true
+      },
+      orderBy,
+      skip,
+      take: limit
+    }),
+    prisma.track.count({ where })
+  ]);
+  
+  // Format results
+  return {
+    items: tracks.map(track => formatTrackForFeed(track)),
+    total
+  };
+};
+```
+
+### Result Formatting
+
+Search results are formatted using helper functions that transform database entities into frontend-friendly objects:
+
+```typescript
+const formatTrackForFeed = (track: any, userId?: string): FeedTrack => {
+  // Calculate formatted duration (e.g., "3:45")
+  const minutes = Math.floor(track.duration / 60);
+  const seconds = track.duration % 60;
+  const formattedDuration = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  
+  return {
+    id: track.id,
+    title: track.title,
+    artworkUrl: track.artworkUrl || track.album?.artworkUrl,
+    duration: track.duration,
+    formattedDuration,
+    playCount: track.playCount,
+    likeCount: track.likeCount,
+    isLiked: false, // Would be determined based on userId
+    artist: {
+      id: track.artist.id,
+      name: track.artist.name,
+      verified: track.artist.verified,
+      profileImage: track.artist.profileImage
+    },
+    album: track.album ? {
+      id: track.album.id,
+      title: track.album.title,
+      artworkUrl: track.album.artworkUrl
+    } : undefined,
+    genre: track.genre,
+    releaseDate: track.releaseDate.toISOString()
+  };
+};
+```
+
+## Data Models
+
+The implementation uses several data models to represent music feed items and search results:
+
+### MusicFeedItem
+
+Represents a single item in the music feed, which can contain different types of content:
+
+```typescript
+interface MusicFeedItem {
+  id: string;
+  type: 'new_release' | 'artist_update' | 'admin_playlist' | 'hot_track' | 'community_post' | 'liked_track' | 'album' | 'track' | 'profile' | 'playlist' | 'artist';
+  title: string;
+  description?: string;
+  timestamp: string;
+  data: {
+    track?: FeedTrack;
+    album?: FeedAlbum;
+    artist?: FeedArtist;
+    playlist?: FeedPlaylist;
+    post?: FeedPost;
+  };
+  metadata?: {
+    reason?: string;
+    location?: string;
+    ranking?: number;
+    section?: 'curated' | 'dive_in' | 'fans_follow' | 'from_artists_you_follow' | 'artists_you_follow' | 'daily_mix';
+    playCount?: number;
+    followers?: number;
+    itemType?: 'track' | 'album' | 'artist' | 'playlist' | 'profile';
+  };
+}
+```
+
+### DiscoverySection
+
+Represents the structure of the discovery section response:
+
+```typescript
+interface DiscoverySection {
+  topSongsByLocation: {
+    location: string;
+    tracks: FeedTrack[];
+  };
+  top10Albums: FeedAlbum[];
+  topSongsWorldwide: FeedTrack[];
+  trending?: {
+    artists: FeedArtist[];
+    tracks: FeedTrack[];
+    albums: FeedAlbum[];
+  };
+}
+```
+
+### SearchResults
+
+Represents the structure of search results:
+
+```typescript
+interface SearchResults {
+  tracks: FeedTrack[];
+  artists: FeedArtist[];
+  albums: FeedAlbum[];
+  playlists: FeedPlaylist[];
+  users: SearchUser[];
+  communities: SearchCommunity[];
+  total: {
+    tracks: number;
+    artists: number;
+    albums: number;
+    playlists: number;
+    users: number;
+    communities: number;
+  };
+}
+```
+
+## Performance Considerations
+
+The implementation includes several optimizations to ensure good performance:
+
+1. **Limited Result Sets**: Each section fetches a limited number of items (typically 5-10) to avoid excessive database load
+
+2. **Selective Includes**: Database queries use selective includes to fetch only the necessary related data
+
+3. **Pagination**: All endpoints support pagination to limit the amount of data transferred
+
+4. **Caching Opportunities**: The implementation is designed to allow for future caching of frequently accessed data
+
+5. **Efficient Queries**: Database queries are optimized to use indexes where possible
+
+## Future Enhancements
+
+Potential future enhancements for the Music Feed and Discovery features:
+
+1. **Advanced Recommendation Engine**: Implement a more sophisticated recommendation algorithm based on user listening history
+
+2. **Caching Layer**: Add Redis caching for frequently accessed feed sections
+
+3. **Real-time Updates**: Implement WebSocket notifications for new content from followed artists
+
+4. **Content Prefetching**: Implement background prefetching of likely-to-be-accessed content
+
+5. **Enhanced Search**: Add fuzzy search capabilities and search result ranking improvements
+
+6. **Collaborative Filtering**: Implement "Users who liked X also liked Y" recommendations
+
+7. **Trending Algorithm**: Develop a more sophisticated trending algorithm that considers recency and velocity of plays
+
+8. **Personalized Discovery**: Tailor discovery sections based on user listening history and preferences

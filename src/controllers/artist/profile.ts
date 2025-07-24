@@ -437,3 +437,27 @@ export const removeArtistProfileImage = async (req: AuthenticatedRequest, res: R
     });
   }
 };
+
+export const getDiscoverArtists = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?.id;
+    const artists = await ArtistService.getDiscoverArtists(userId);
+    res.status(200).json({
+      success: true,
+      data: { artists }
+    });
+  } catch (error) {
+    logger.error('Error fetching discover artists:', error);
+    if (error.statusCode) {
+      res.status(error.statusCode).json({
+        success: false,
+        error: { message: error.message }
+      });
+      return;
+    }
+    res.status(500).json({
+      success: false,
+      error: { message: 'Internal server error' }
+    });
+  }
+};

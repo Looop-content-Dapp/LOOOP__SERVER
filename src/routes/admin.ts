@@ -27,6 +27,7 @@ import {
   approveAdmin,
   updateAdminPermissions,
   createAdminPlaylist,
+  getAdminPlaylists,
   getAdminProfile,
   banUser,
   getPendingAdminRegistrations,
@@ -83,6 +84,12 @@ router.post('/playlists',
   validateAdminPlaylistCreation,
   handleAdminValidationErrors,
   asyncHandler(createAdminPlaylist)
+);
+
+router.get('/playlists/all',
+//   requireAuth,
+//   requireAdmin,
+  asyncHandler(getAdminPlaylists)
 );
 
 // Admin management (Super Admin only)

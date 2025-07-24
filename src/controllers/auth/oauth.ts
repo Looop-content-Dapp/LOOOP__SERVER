@@ -22,31 +22,29 @@ const googleClient = new OAuth2Client({
   redirectUri: GOOGLE_REDIRECT_URI,
 });
 
-// Google OAuth handlers
-export const googleAuth = (_req: Request, res: Response) => {
-  const authUrl = googleClient.generateAuthUrl({
-    access_type: 'offline',
-    scope: ['email', 'profile'],
-  });
-  res.redirect(authUrl);
-};
-
-export const googleAuthCallback = async (req: Request, res: Response) => {
+//  OAuth handlers for direct token verification
+export const mobileGoogleAuth = async (req: Request, res: Response) => {
   try {
-    const code = req.query.code as string;
-    if (!code) throw createError('Authorization code not provided', 400);
+    const { token, email, channel } = req.body;
 
-    const { tokens } = await googleClient.getToken(code);
+    if (!token || !email || channel !== 'google') {
+      throw createError('Invalid request parameters', 400);
+    }
+
+    // Verify the Google ID token
     const ticket = await googleClient.verifyIdToken({
-      idToken: tokens.id_token!,
+      idToken: token,
       audience: GOOGLE_CLIENT_ID,
     });
 
     const payload = ticket.getPayload();
-    if (!payload || !payload.email) throw createError('Invalid token payload', 400);
+    if (!payload || !payload.email || payload.email !== email) {
+      throw createError('Invalid token or email mismatch', 400);
+    }
 
     // Find or create user
     let user = await prisma.user.findUnique({ where: { email: payload.email } });
+    let isNewUser = false;
 
     if (!user) {
       user = await prisma.user.create({
@@ -59,77 +57,104 @@ export const googleAuthCallback = async (req: Request, res: Response) => {
           password: '',
         },
       });
+      isNewUser = true;
     }
 
     // Generate JWT token
-    const token = AuthService.generateToken({
+    const jwtToken = AuthService.generateToken({
       userId: user.id,
       email: user.email,
       name: user.name,
+      username: user.username,
       isVerified: false,
       emailVerified: true
     });
 
-    res.redirect(`com.looop.app:/oauth2redirect/google?token=${token}`);
+    res.json({
+      success: true,
+      message: 'Google authentication successful',
+      data: {
+        token: jwtToken,
+        isNewUser,
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          username: user.username,
+          emailVerified: user.emailVerified,
+          image: user.image
+        }
+      }
+    });
   } catch (error) {
-    logger.error('Google auth callback error:', error);
-    res.redirect('com.looop.app:/oauth2redirect/google?error=true');
+    logger.error('Mobile Google auth error:', error);
+    throw createError('Google authentication failed', 401);
   }
 };
 
-// Apple OAuth handlers
-export const appleAuth = (_req: Request, res: Response) => {
-  const authUrl = `https://appleid.apple.com/auth/authorize?client_id=${APPLE_CLIENT_ID}&redirect_uri=${APPLE_REDIRECT_URI}&response_type=code&scope=email name&response_mode=form_post`;
-  res.redirect(authUrl);
-};
-
-export const appleAuthCallback = async (req: Request, res: Response) => {
+export const mobileAppleAuth = async (req: Request, res: Response) => {
   try {
-    const { code } = req.body;
-    if (!code) throw createError('Authorization code not provided', 400);
+    const { token, email, channel } = req.body;
 
-    const response = await AppleSignIn.getAuthorizationToken(code, {
-      clientID: APPLE_CLIENT_ID,
-      clientSecret: APPLE_CLIENT_SECRET,
-      redirectUri: APPLE_REDIRECT_URI,
-    });
+    if (!token || !email || channel !== 'apple') {
+      throw createError('Invalid request parameters', 400);
+    }
 
-    const { sub: appleUserId, email, aud } = await AppleSignIn.verifyIdToken(response.id_token, {
+    // Verify the Apple ID token
+    const decoded = await AppleSignIn.verifyIdToken(token, {
       audience: APPLE_CLIENT_ID,
     });
 
-    if (!email) throw createError('Email not provided', 400);
+    if (!decoded.email || decoded.email !== email) {
+      throw createError('Invalid token or email mismatch', 400);
+    }
 
     // Find or create user
-    let user = await prisma.user.findUnique({ where: { email } });
+    let user = await prisma.user.findUnique({ where: { email: decoded.email } });
+    let isNewUser = false;
 
     if (!user) {
       user = await prisma.user.create({
         data: {
-          email,
-          name: email.split('@')[0],
+          email: decoded.email,
+          name: decoded.email.split('@')[0],
           emailVerified: true,
           authProvider: 'APPLE',
           password: '',
           image: null
         },
       });
+      isNewUser = true;
     }
 
     // Generate JWT token
-    const token = AuthService.generateToken({
+    const jwtToken = AuthService.generateToken({
       userId: user.id,
       email: user.email,
       name: user.name,
+      username: user.username,
       isVerified: false,
       emailVerified: true
     });
 
-    res.redirect(`com.looop.Looop:/oauth2redirect/apple?token=${token}`);
+    res.json({
+      success: true,
+      message: 'Apple authentication successful',
+      data: {
+        token: jwtToken,
+        isNewUser,
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          username: user.username,
+          emailVerified: user.emailVerified,
+          image: user.image
+        }
+      }
+    });
   } catch (error) {
-    logger.error('Apple auth callback error:', error);
-    res.redirect('com.looop.app:/oauth2redirect/apple?error=true');
+    logger.error('Mobile Apple auth error:', error);
+    throw createError('Apple authentication failed', 401);
   }
 };
-
-

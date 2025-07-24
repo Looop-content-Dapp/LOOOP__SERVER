@@ -70,7 +70,8 @@ export interface Comment {
 
 export interface UserFeedItem {
   id: string;
-  type: 'community_post' | 'new_track' | 'new_album' | 'artist_update' | 'community_joined';
+  type: 'community_post' | 'new_track' | 'new_album' | 'artist_update' | 'community_joined' | 
+        'admin_playlist' | 'trending_track' | 'recommended_artist' | 'recommended_track' | 'popular_track';
   timestamp: string;
   author: {
     id: string;
@@ -99,6 +100,19 @@ export interface UserFeedItem {
       id: string;
       name: string;
       imageUrl?: string;
+    };
+    playlist?: {
+      id: string;
+      title: string;
+      artworkUrl?: string;
+      trackCount: number;
+    };
+    artist?: {
+      id: string;
+      name: string;
+      profileImage?: string;
+      verified: boolean;
+      followers: number;
     };
   };
   engagement: {

@@ -66,21 +66,21 @@ const retryOnRateLimit = async (apiCall, maxRetries = 3, baseDelay = 1) => {
 };
 
 // Transform Spotify artist data to Prisma format
-const transformSpotifyArtist = (spotifyArtist, user) => {
+const transformSpotifyArtist = (spotifyArtist) => {
   const biography = `${spotifyArtist.name} is an artist with ${spotifyArtist.followers?.total || 0} followers on Spotify.` +
     (spotifyArtist.genres?.length ? ` Their music spans genres including ${spotifyArtist.genres.join(', ')}.` : '');
 
   return {
-    userId: user.id,
+    userId: null,
     name: spotifyArtist.name,
-    email: `artist_${spotifyArtist.id}_${Date.now()}@spotify-import.com`,
+    email: `spotify-${spotifyArtist.id}@placeholder.com`,
     profileImage: spotifyArtist.images?.[0]?.url || null,
     biography,
     country: 'US', // Default as Spotify doesn't provide this
     websiteurl: spotifyArtist.external_urls?.spotify || null,
     monthlyListeners: Math.floor(Math.random() * 1000000) + 1000,
     followers: spotifyArtist.followers?.total || 0,
-    verified: true,
+    verified: false,
     socialLinks: {
       spotify: spotifyArtist.external_urls?.spotify || null,
       instagram: null,
@@ -106,20 +106,12 @@ const transformSpotifyTrack = (spotifyTrack, artistId, userId, songId, releaseId
     userId,
     songId,
     releaseId,
-    duration: Math.floor((spotifyTrack.duration_ms || 0) / 1000), // Convert to seconds
+    duration: Math.floor((spotifyTrack.duration_ms || 0) / 1000),
     fileUrl: spotifyTrack.preview_url || 'placeholder_url',
-    genres: {
-      create: (spotifyTrack.album?.genres || ['unknown']).map(genreName => ({
-        genre: {
-          connectOrCreate: {
-            where: { name: genreName },
-            create: { name: genreName }
-          }
-        }
-      }))},
-    bpm: Math.floor(Math.random() * 60) + 70, // Random BPM between 70-130
+genre: spotifyTrack.album?.genres || ['unknown'],
+bpm: Math.floor(Math.random() * 60) + 70,
     key: ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'][Math.floor(Math.random() * 12)],
-    mood: ['Energetic', 'Calm', 'Happy', 'Melancholic'][Math.floor(Math.random() * 4)],
+    mood: [['Energetic', 'Calm', 'Happy', 'Melancholic'][Math.floor(Math.random() * 4)]],
     tags: [],
     isPublic: true,
     playCount: Math.floor(Math.random() * 100000),
@@ -169,14 +161,7 @@ const transformSpotifyRelease = (spotifyAlbum, artistId) => {
       }
     },
     metadata: {
-      genres: (spotifyAlbum.genres || ['unknown']).map(genreName => ({
-        genre: {
-          connectOrCreate: {
-            where: { name: genreName },
-            create: { name: genreName }
-          }
-        }
-      })),
+      genres: spotifyAlbum.genres || ['unknown'],
       totalTracks: spotifyAlbum.total_tracks || 0,
       spotifyId: spotifyAlbum.id,
       language: 'en'

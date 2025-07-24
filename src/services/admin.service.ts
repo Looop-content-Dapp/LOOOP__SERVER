@@ -603,4 +603,121 @@ export class AdminService {
       throw createError('Failed to create admin playlist', 500);
     }
   }
+
+  /**
+   * Get all admin playlists
+   */
+  public static async getAdminPlaylists(params: {
+    page?: number;
+    limit?: number;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
+    search?: string;
+    featuredOnly?: boolean;
+  }): Promise<{ playlists: FeaturedPlaylist[]; total: number }> {
+    try {
+      const {
+        page = 1,
+        limit = 20,
+        sortBy = 'createdAt',
+        sortOrder = 'desc',
+        search,
+        featuredOnly = false
+      } = params;
+
+      const skip = (page - 1) * limit;
+
+      // Build where clause
+      let whereClause: any = {
+        isPublic: true,
+        user: {
+          isAdmin: true
+        }
+      };
+
+      // Note: featuredOnly filter is currently not supported as the schema doesn't have isFeatured field
+      // Keeping the parameter for future implementation
+      // if (featuredOnly) {
+      //   whereClause.isFeatured = true;
+      // }
+
+      // Add search filter
+      if (search) {
+        whereClause.OR = [
+          { title: { contains: search, mode: 'insensitive' } },
+          { description: { contains: search, mode: 'insensitive' } }
+        ];
+      }
+
+      // Build order by clause
+      let orderByClause: any = {};
+      switch (sortBy) {
+        case 'title':
+          orderByClause.title = sortOrder;
+          break;
+        case 'trackCount':
+          orderByClause = {
+            tracks: {
+              _count: sortOrder
+            }
+          };
+          break;
+        case 'featuredAt':
+          // Note: featuredAt sorting is not supported as the schema doesn't have featuredAt field
+          // Fallback to createdAt sorting
+          orderByClause.createdAt = sortOrder;
+          break;
+        default:
+          orderByClause.createdAt = sortOrder;
+      }
+
+      const [playlists, total] = await Promise.all([
+        prisma.playlist.findMany({
+          where: whereClause,
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                isAdmin: true
+              }
+            },
+            _count: {
+              select: {
+                tracks: true
+              }
+            }
+          },
+          orderBy: orderByClause,
+          skip,
+          take: limit
+        }),
+        prisma.playlist.count({ where: whereClause })
+      ]);
+
+      const formattedPlaylists = playlists.map(playlist => ({
+        id: playlist.id,
+        title: playlist.title,
+        description: playlist.description,
+        artworkUrl: playlist.artworkUrl,
+        trackCount: playlist._count.tracks,
+        createdBy: {
+          id: playlist.user.id,
+          name: playlist.user.name,
+          isAdmin: playlist.user.isAdmin
+        },
+        isFeatured: false, // Default value since the field doesn't exist in the schema
+        featuredAt: null, // Default value since the field doesn't exist in the schema
+        createdAt: playlist.createdAt.toISOString()
+      }));
+
+      return { playlists: formattedPlaylists, total };
+    } catch (error) {
+      logger.error('Error fetching admin playlists:', error);
+      if (error.statusCode) {
+        throw error;
+      }
+      throw createError('Failed to fetch admin playlists', 500);
+    }
+  }
 }

@@ -28,7 +28,8 @@ import {
   updateArtistProfile,
   searchArtists,
   uploadArtistProfileImage,
-  removeArtistProfileImage
+  removeArtistProfileImage,
+  getDiscoverArtists
 } from '@/controllers/artist/profile';
 
 import {
@@ -111,5 +112,8 @@ router.get('/health', (_req: Request, res: Response) => {
     }
   });
 });
+
+// Discover artists
+router.get('/discover', getDiscoverArtists);
 
 export default router;

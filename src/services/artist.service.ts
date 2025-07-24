@@ -524,6 +524,16 @@ export class ArtistService {
             orderBy: { playCount: 'desc' },
             take: 10
           },
+          releases: {
+             select: {
+                 artwork: true,
+                 metadata: true,
+                 title: true,
+                 id: true,
+                 contentInfo: true,
+                 releaseDate: true
+             }
+          },
           _count: {
             select: {
               tracks: true,
@@ -1521,6 +1531,185 @@ export class ArtistService {
     } catch (error) {
       logger.error('Error searching artists:', error);
       throw createError('Failed to search artists', 500);
+    }
+  }
+
+  /**
+   * Get discover artists - personalized for authenticated users, random for others
+   * Returns comprehensive artist data for all artists in database
+   */
+  public static async getDiscoverArtists(userId?: string) {
+    try {
+      if (userId) {
+        // Get user's followed artists to personalize recommendations
+        const followedArtists = await prisma.follow.findMany({
+          where: {
+            followerId: userId
+          }
+        });
+
+        if (followedArtists.length > 0) {
+          // Get the artist IDs that the user follows
+          const followedArtistIds = followedArtists.map(follow => follow.followingId);
+
+          // Get the actual artist data with genres
+          const artistsData = await prisma.artist.findMany({
+            where: {
+              id: {
+                in: followedArtistIds
+              }
+            },
+            include: {
+              genres: {
+                include: {
+                  genre: true
+                }
+              }
+            }
+          });
+
+          // Get genres from followed artists
+          const followedGenres = artistsData
+            .flatMap(artist => artist.genres || [])
+            .map(artistGenre => artistGenre.genre.id);
+
+          if (followedGenres.length > 0) {
+            // Find artists with similar genres - get comprehensive data
+            const recommendedArtists = await prisma.artist.findMany({
+              where: {
+                isActive: true,
+                userId: {
+                  not: userId // Exclude user's own artist profile if they have one
+                },
+                genres: {
+                  some: {
+                    genreId: {
+                      in: followedGenres
+                    }
+                  }
+                }
+              },
+              include: {
+                user: {
+                  select: {
+                    id: true,
+                    name: true,
+                    email: true,
+                    image: true,
+                    isVerified: true
+                  }
+                },
+                tracks: {
+                  where: { isPublic: true },
+                  select: {
+                    id: true,
+                    title: true,
+                    playCount: true,
+                    likeCount: true,
+                    artworkUrl: true,
+                    createdAt: true,
+                    duration: true,
+                    genre: true
+                  },
+                  orderBy: { playCount: 'desc' },
+                  take: 5
+                },
+                genres: {
+                  include: {
+                    genre: true
+                  }
+                },
+                _count: {
+                  select: {
+                    tracks: true,
+                    communities: true,
+                    subscriptions: true
+                  }
+                }
+              },
+              orderBy: {
+                popularity: 'desc'
+              },
+              // Get all matching artists for comprehensive discovery
+            });
+
+            if (recommendedArtists.length > 0) {
+              // Shuffle all results for variety
+               const shuffled = recommendedArtists
+                 .sort(() => Math.random() - 0.5);
+              logger.info('Personalized artists retrieved', { userId, count: shuffled.length });
+              return shuffled;
+            }
+          }
+        }
+      }
+
+      // Fallback to random artists for unauthenticated users or users with no follows
+      return this.getRandomArtists();
+    } catch (error) {
+      logger.error('Error getting discover artists:', error);
+      throw createError('Failed to get discover artists', 500);
+    }
+  }
+
+  /**
+   * Get random artists with comprehensive data
+   * Returns all artists in database
+   */
+  public static async getRandomArtists() {
+    try {
+      const artists = await prisma.artist.findMany({
+        where: {
+          isActive: true
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              image: true,
+              isVerified: true
+            }
+          },
+          tracks: {
+            where: { isPublic: true },
+            select: {
+              id: true,
+              title: true,
+              playCount: true,
+              likeCount: true,
+              artworkUrl: true,
+              createdAt: true,
+              duration: true,
+              genre: true
+            },
+            orderBy: { playCount: 'desc' },
+            take: 5
+          },
+          genres: {
+            include: {
+              genre: true
+            }
+          },
+          _count: {
+            select: {
+              tracks: true,
+              communities: true,
+              subscriptions: true
+            }
+          }
+        },
+        // Get all active artists
+      });
+
+      // Shuffle all artists
+       const shuffled = artists.sort(() => Math.random() - 0.5);
+      logger.info('Random artists retrieved', { count: shuffled.length });
+      return shuffled;
+    } catch (error) {
+      logger.error('Error getting random artists:', error);
+      throw createError('Failed to get random artists', 500);
     }
   }
 }
